@@ -63,14 +63,16 @@ export function useAgentChat(
     if (!message.trim() || isLoading) return;
 
     const userMessage: ChatMessage = { role: "user", content: message };
-    setMessages(prev => [...prev, userMessage]);
+    const nextHistory = [...messages, userMessage];
+
+    setMessages(nextHistory);
     setIsLoading(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("agent-chat", {
         body: {
           message,
-          history: messages,
+          history: nextHistory,
           agentSettings,
           userContext,
         },

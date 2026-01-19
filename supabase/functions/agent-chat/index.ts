@@ -25,45 +25,198 @@ interface UserContext {
   background?: string;
 }
 
-// Detect if user wants to generate posts
-function detectPostGenerationIntent(message: string): boolean {
-  const triggers = [
-    'create', 'generate', 'write', 'make', 'post about',
-    'posts about', 'schedule', 'publish', 'posts on', 'posts for',
-    'need posts', 'want posts', 'give me', 'prepare', 'draft'
-  ];
-  const lowerMessage = message.toLowerCase();
-  return triggers.some(t => lowerMessage.includes(t)) && 
-    (lowerMessage.includes('post') || lowerMessage.includes('content'));
+type AgentAction = "generate_posts" | "chat";
+
+interface ParsedAgentRequest {
+  action: AgentAction;
+  topic: string | null;
+  count: number;
 }
 
-// Extract topic from message
-function extractTopic(message: string): string {
+function fallbackDetectPostGenerationIntent(message: string): boolean {
+  const triggers = [
+    "create",
+    "generate",
+    "write",
+    "make",
+    "draft",
+    "schedule",
+    "publish",
+    "regenerate",
+  ];
+  const lower = message.toLowerCase();
+  return triggers.some((t) => lower.includes(t)) &&
+    (lower.includes("post") || lower.includes("posts") || lower.includes("content"));
+}
+
+function fallbackExtractCount(message: string): number {
+  const explicitNumber = message.match(/(\d+)\s*(?:posts?|drafts?)/i);
+  if (explicitNumber) {
+    const n = Number.parseInt(explicitNumber[1], 10);
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), 10) : 5;
+  }
+
+  const lower = message.toLowerCase();
+  if (/(single|one)\s+(post|draft)/i.test(lower) || lower.includes("regenerate")) return 1;
+  return 5;
+}
+
+function looksLikeNoTopic(topic: string): boolean {
+  const lowered = topic.toLowerCase();
+  if (topic.trim().length < 3) return true;
+  if (/\b(show me|here|topic|please)\b/i.test(lowered)) return true;
+
+  const stop = new Set([
+    "the",
+    "a",
+    "an",
+    "and",
+    "show",
+    "me",
+    "here",
+    "topic",
+    "please",
+    "create",
+    "generate",
+    "write",
+    "make",
+    "posts",
+    "post",
+    "content",
+    "draft",
+    "drafts",
+  ]);
+  const remaining = lowered
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9-]/g, ""))
+    .filter(Boolean)
+    .filter((t) => !stop.has(t));
+
+  return remaining.length === 0;
+}
+
+function fallbackExtractTopic(message: string): string | null {
   const patterns = [
-    /(?:about|on|regarding|for)\s+["']?([^"'\n.]+?)["']?(?:\s+for|\s+in|\s+on|\.|\s+next|\s+this|$)/i,
-    /(?:posts?|content)\s+(?:about|on)\s+["']?([^"'\n.]+?)["']?/i,
+    /(?:about|on|regarding|for)\s+["']?([^"'\n.]+?)["']?(?:\.|$)/i,
+    /(?:topic)\s*(?::|=)?\s*["']?([^"'\n.]+?)["']?(?:\.|$)/i,
     /["']([^"']+)["']/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = message.match(pattern);
-    if (match && match[1] && match[1].length > 2) {
-      return match[1].trim();
+    if (match?.[1]) {
+      const t = match[1].trim();
+      if (!looksLikeNoTopic(t)) return t;
     }
   }
-  
-  return message
-    .replace(/^(create|generate|write|make|please|can you|could you|i want|i need)\s*/gi, '')
-    .replace(/\s*(posts?|content|articles?)\s*/gi, ' ')
-    .replace(/\s*(about|on|for|regarding)\s*/gi, ' ')
-    .replace(/\d+\s*/g, '')
-    .trim() || "industry trends";
+
+  // Last resort: try to remove common filler and see if anything meaningful remains.
+  const rough = message
+    .replace(/^(create|generate|write|make|please|can you|could you|i want|i need)\s*/gi, "")
+    .replace(/\s*(posts?|content|articles?|drafts?)\s*/gi, " ")
+    .replace(/\s*(about|on|for|regarding)\s*/gi, " ")
+    .replace(/\d+\s*/g, " ")
+    .replace(/\b(show me|here|topic|please)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!rough || looksLikeNoTopic(rough)) return null;
+  return rough;
 }
 
-// Extract count from message
-function extractCount(message: string): number {
-  const match = message.match(/(\d+)\s*posts?/i);
-  return match ? Math.min(Math.max(parseInt(match[1]), 1), 10) : 5;
+async function parseAgentRequest(
+  {
+    message,
+    history,
+  }: {
+    message: string;
+    history: ChatMessage[];
+  },
+  apiKey: string,
+): Promise<ParsedAgentRequest> {
+  const fallback: ParsedAgentRequest = {
+    action: fallbackDetectPostGenerationIntent(message) ? "generate_posts" : "chat",
+    topic: fallbackExtractTopic(message),
+    count: fallbackExtractCount(message),
+  };
+
+  // Keep it cheap: only parse with AI when the message *might* be asking for generation.
+  if (fallback.action !== "generate_posts") return fallback;
+
+  const recent = history.slice(-6).map((m) => `${m.role}: ${m.content}`).join("\n");
+
+  try {
+    const parseResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You extract structured intent from user messages for a LinkedIn post generator. " +
+              "If the user asks to generate/write/create posts, set action=generate_posts; otherwise action=chat. " +
+              "Topic must be a short, clean phrase (e.g. 'AI trends', 'AI for recruiters'). " +
+              "Remove filler like 'show me', 'here', 'topic'. If topic is missing/unclear, set topic=null. " +
+              "Count must be 1-10; default 5 unless user clearly asks otherwise (or says 'single'/'regenerate' => 1).",
+          },
+          {
+            role: "user",
+            content: `Latest message:\n${message}\n\nRecent conversation:\n${recent}`,
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "parse_agent_request",
+              description: "Parse the user's request into action, topic and count.",
+              parameters: {
+                type: "object",
+                properties: {
+                  action: { type: "string", enum: ["generate_posts", "chat"] },
+                  topic: { type: ["string", "null"] },
+                  count: { type: "integer", minimum: 1, maximum: 10 },
+                },
+                required: ["action", "topic", "count"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "parse_agent_request" } },
+      }),
+    });
+
+    if (!parseResponse.ok) return fallback;
+
+    const parseData = await parseResponse.json();
+    const msg = parseData.choices?.[0]?.message;
+
+    const argsText: string | undefined =
+      msg?.tool_calls?.[0]?.function?.arguments ??
+      msg?.function_call?.arguments;
+
+    if (!argsText) return fallback;
+
+    const parsed = JSON.parse(argsText) as ParsedAgentRequest;
+
+    const count = Math.min(Math.max(Number(parsed.count ?? fallback.count), 1), 10);
+    const topicRaw = typeof parsed.topic === "string" ? parsed.topic.trim() : null;
+    const topic = topicRaw && !looksLikeNoTopic(topicRaw) ? topicRaw : null;
+
+    return {
+      action: parsed.action === "chat" ? "chat" : "generate_posts",
+      topic,
+      count,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 // Get emoji config based on level
@@ -120,12 +273,27 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const shouldGeneratePosts = detectPostGenerationIntent(message);
-    
+    const parsed = await parseAgentRequest({ message, history }, LOVABLE_API_KEY);
+
+    const shouldGeneratePosts = parsed.action === "generate_posts";
+
     // If generating posts, do research first, then generate
     if (shouldGeneratePosts) {
-      const topic = extractTopic(message);
-      const count = extractCount(message);
+      const topic = parsed.topic;
+      const count = parsed.count;
+
+      if (!topic) {
+        return new Response(
+          JSON.stringify({
+            type: "message",
+            message:
+              "I can do that — what topic should the posts be about?\n\nExamples:\n• Create 5 posts about AI trends\n• Create 3 posts about AI tools for small business\n• Create 10 posts about recruiting with AI",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       
       console.log(`Generating ${count} posts about: ${topic}`);
       
