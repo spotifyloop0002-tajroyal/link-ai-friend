@@ -349,10 +349,10 @@ Format as a concise research brief that can be used to write engaging LinkedIn p
 RESEARCH INSIGHTS TO USE:
 ${researchInsights}
 
-USER CONTEXT:
+USER CONTEXT (use ONLY if relevant to the topic):
 - Industry: ${userContext.industry || 'Technology'}
-- Company: ${userContext.company || 'Professional'}
-- Background: ${userContext.background || 'Business professional'}
+${userContext.company ? `- Company: ${userContext.company}` : ''}
+${userContext.background ? `- Background: ${userContext.background}` : ''}
 
 AGENT STYLE REQUIREMENTS:
 - Agent Type: ${agentSettings.type || 'professional'}
@@ -362,13 +362,17 @@ ${agentSettings.voiceReference ? `- Voice Style: Write like ${agentSettings.voic
 - Emoji Usage: ${getEmojiConfig(agentSettings.emojiLevel)}
 - Post Length: ${getPostLengthConfig(agentSettings.postLength)}
 
-POST REQUIREMENTS:
+CRITICAL POST REQUIREMENTS:
 1. Each post MUST be unique with a different angle/hook
 2. Use the research insights to add value and credibility
 3. Format properly for LinkedIn (use line breaks for readability)
 4. Include 2-4 relevant hashtags at the end
 5. End with a question or call-to-action to drive engagement
 6. Make it feel authentic, not AI-generated
+7. NEVER mention "LinkedBot" or any specific product name - write GENERIC posts that the user can personalize
+8. Write as if YOU are the user sharing their own thoughts/insights - use first person "I", "we", "my experience"
+9. Keep posts versatile so they work for any professional in the industry
+10. DO NOT promote any specific company or tool unless the user explicitly mentioned it in the topic
 
 POSTING TIMES - assign each post one of these optimal times:
 - "morning" (8-10 AM) - Best for B2B, professional insights
@@ -486,18 +490,24 @@ Return ONLY a valid JSON array (no markdown, no explanation):
     }
 
     // Normal conversation (not generating posts)
-    const conversationPrompt = `You are a friendly, helpful LinkedIn posting assistant for LinkedBot.
+    const conversationPrompt = `You are a friendly, helpful LinkedIn content assistant.
 
 USER CONTEXT:
 - Name: ${userContext.name || 'there'}
-- Industry: ${userContext.industry || 'Technology'}
-- Company: ${userContext.company || 'their company'}
+${userContext.industry ? `- Industry: ${userContext.industry}` : ''}
+${userContext.company ? `- Company: ${userContext.company}` : ''}
 
 YOUR PERSONALITY:
 - Friendly and conversational, not robotic
 - Use occasional emojis but don't overdo it
 - Be concise but helpful
 - Always guide users toward creating content
+
+CRITICAL RULES:
+1. NEVER mention "LinkedBot" or any specific product name
+2. You are a NEUTRAL assistant helping the user create posts for THEIR OWN LinkedIn profile
+3. Keep suggestions generic and versatile
+4. Focus on the USER's ideas and topics, not promoting any tool
 
 CONVERSATION RULES:
 1. If user says "hi", "hello", "hey" → Greet warmly, introduce yourself briefly, ask what they'd like to post about
