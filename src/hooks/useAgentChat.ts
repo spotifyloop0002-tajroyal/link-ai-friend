@@ -46,16 +46,108 @@ interface UseAgentChatReturn {
   generateImageForPost: (postId: string) => Promise<void>;
 }
 
-const initialMessage: ChatMessage = {
-  role: "assistant",
-  content: "Hey! 👋 I'm your LinkedIn posting assistant. I can help you create engaging posts for your profile.\n\nI can:\n• Create professional LinkedIn posts on any topic\n• Research trending topics in your industry\n• Suggest the best times to post for maximum reach\n• Generate AI images for your posts\n• Schedule multiple posts in advance\n\nWhat would you like to post about today? Try: \"Create 5 posts about AI trends\""
+// Agent type specific welcome messages with sample topics
+const agentWelcomeMessages: Record<string, { intro: string; samples: string[] }> = {
+  "comedy": {
+    intro: "Ready to make your network laugh! 😄 I specialize in witty, humorous content that entertains while delivering value.",
+    samples: [
+      "Monday motivation (with a twist)",
+      "Tech industry stereotypes",
+      "Office culture observations",
+      "Work-from-home fails"
+    ]
+  },
+  "professional": {
+    intro: "I'll help you craft polished, industry-focused content that positions you as a thought leader.",
+    samples: [
+      "Industry best practices",
+      "Leadership lessons learned",
+      "Career growth strategies",
+      "Professional development tips"
+    ]
+  },
+  "storytelling": {
+    intro: "Let's turn your experiences into compelling narratives! 📖 I craft story-driven posts that connect emotionally.",
+    samples: [
+      "Your career journey moments",
+      "Lessons from failure",
+      "Behind-the-scenes at work",
+      "A mentor who changed your path"
+    ]
+  },
+  "thought-leadership": {
+    intro: "Time to share bold ideas! 💡 I help you craft contrarian takes and expert opinions that spark discussion.",
+    samples: [
+      "Unpopular industry opinions",
+      "Future predictions for your field",
+      "Why common advice is wrong",
+      "What most people miss about..."
+    ]
+  },
+  "motivational": {
+    intro: "Let's inspire your network! ✨ I create uplifting content that encourages and empowers others.",
+    samples: [
+      "Overcoming challenges",
+      "Celebrating small wins",
+      "Mindset shifts that changed everything",
+      "Advice for your younger self"
+    ]
+  },
+  "data-analytics": {
+    intro: "Let's make your insights data-driven! 📊 I craft posts backed by statistics and research.",
+    samples: [
+      "Industry statistics breakdown",
+      "Market trends analysis",
+      "Research findings in your field",
+      "Data-backed predictions"
+    ]
+  },
+  "creative": {
+    intro: "Time to get creative! 🎨 I help you craft visually-oriented, design-focused content.",
+    samples: [
+      "Design thinking in action",
+      "Creative process insights",
+      "Visual trends in your industry",
+      "Innovation and creativity tips"
+    ]
+  },
+  "news": {
+    intro: "Stay current and relevant! 📰 I help you share timely updates and industry news.",
+    samples: [
+      "Breaking industry news",
+      "Company announcements",
+      "Event recaps",
+      "Weekly industry roundup"
+    ]
+  }
 };
+
+function getInitialMessage(agentType: string): ChatMessage {
+  const config = agentWelcomeMessages[agentType] || agentWelcomeMessages["professional"];
+  
+  return {
+    role: "assistant",
+    content: `Hey! 👋 I'm your LinkedIn content assistant. ${config.intro}
+
+I can:
+• Create engaging LinkedIn posts on any topic
+• Research trending topics in your industry
+• Suggest the best times to post for maximum reach
+• Generate AI images for your posts
+• Schedule your posts in advance
+
+**Sample topics for this style:**
+${config.samples.map(s => `• ${s}`).join('\n')}
+
+What would you like to post about? Just tell me your topic and how many posts you need!`
+  };
+}
 
 export function useAgentChat(
   agentSettings: AgentSettings,
   userContext: UserContext = {}
 ): UseAgentChatReturn {
-  const [messages, setMessages] = useState<ChatMessage[]>([initialMessage]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [getInitialMessage(agentSettings.type)]);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>([]);
 
@@ -110,9 +202,9 @@ export function useAgentChat(
   }, [messages, agentSettings, userContext, isLoading]);
 
   const resetChat = useCallback(() => {
-    setMessages([initialMessage]);
+    setMessages([getInitialMessage(agentSettings.type)]);
     setGeneratedPosts([]);
-  }, []);
+  }, [agentSettings.type]);
 
   const updatePost = useCallback((postId: string, updates: Partial<GeneratedPost>) => {
     setGeneratedPosts(prev =>
