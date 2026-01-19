@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -32,10 +33,11 @@ import {
   Check,
   Edit,
   Trash2,
-  Pause,
-  Play,
-  X,
+  Loader2,
 } from "lucide-react";
+import { useAgentChat } from "@/hooks/useAgentChat";
+import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
+import { toast } from "sonner";
 
 const agentTypes = [
   { id: "comedy", icon: Smile, label: "Comedy/Humorous", description: "Funny, light-hearted posts" },
@@ -69,10 +71,6 @@ const existingAgents = [
   },
 ];
 
-const sampleMessages = [
-  { role: "assistant", content: "Hi! I'm your Professional agent. Tell me what you'd like me to post about. You can:\n\n• Request single or multiple posts\n• Specify topics and themes\n• Set posting schedule\n• Upload photos or ask me to generate them\n\nI'll also suggest the best posting times for maximum reach!" },
-];
-
 const AgentsPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createStep, setCreateStep] = useState(1);
@@ -82,30 +80,48 @@ const AgentsPage = () => {
   const [postLength, setPostLength] = useState("medium");
   const [tone, setTone] = useState("conversational");
   const [voiceReference, setVoiceReference] = useState("");
-  const [chatMessages, setChatMessages] = useState(sampleMessages);
   const [chatInput, setChatInput] = useState("");
   const [generatePhoto, setGeneratePhoto] = useState(false);
   const [agents, setAgents] = useState(existingAgents);
+  
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return;
-    
-    setChatMessages([
-      ...chatMessages,
-      { role: "user", content: chatInput },
-    ]);
+  // Agent chat hook
+  const {
+    messages,
+    isLoading,
+    generatedPosts,
+    sendMessage,
+    resetChat,
+    updatePost,
+    deletePost,
+    regeneratePost,
+  } = useAgentChat(
+    {
+      type: selectedType || "professional",
+      tone,
+      emojiLevel: emojiLevel[0],
+      postLength,
+      voiceReference: voiceReference || undefined,
+    },
+    {
+      name: "User",
+      industry: "Technology",
+      company: "LinkedBot",
+      background: "Building innovative solutions",
+    }
+  );
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isLoading) return;
+    const message = chatInput;
     setChatInput("");
-
-    // Simulate AI response
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: `Great! I'll create posts about "${chatInput}". Based on your topic, I recommend posting at 9:00 AM on weekdays for maximum engagement in the tech industry.\n\nShould I use these suggested times or do you prefer custom times?`,
-        },
-      ]);
-    }, 1000);
+    await sendMessage(message);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -119,8 +135,8 @@ const AgentsPage = () => {
     setCreateStep(1);
     setSelectedType(null);
     setShowAdvanced(false);
-    setChatMessages(sampleMessages);
     setChatInput("");
+    resetChat();
   };
 
   const toggleAgentStatus = (agentId: number) => {
@@ -134,6 +150,16 @@ const AgentsPage = () => {
   const getTypeIcon = (type: string) => {
     const agentType = agentTypes.find((t) => t.id === type);
     return agentType?.icon || Bot;
+  };
+
+  const handleScheduleAll = () => {
+    if (generatedPosts.length === 0) {
+      toast.error("No posts to schedule");
+      return;
+    }
+    toast.success(`Scheduled ${generatedPosts.length} posts!`);
+    setShowCreateModal(false);
+    resetModal();
   };
 
   return (
@@ -333,119 +359,121 @@ const AgentsPage = () => {
           )}
 
           {createStep === 2 && (
-            <>
-              <DialogHeader>
+            <div className="flex flex-col h-full">
+              <DialogHeader className="flex-shrink-0">
                 <DialogTitle>Customize Your Agent</DialogTitle>
                 <DialogDescription>
                   Fine-tune how your agent creates content (optional)
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="py-6 space-y-6">
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center gap-2 text-sm font-medium text-primary"
-                >
-                  {showAdvanced ? "Hide" : "Show"} Advanced Settings
-                  <ArrowRight
-                    className={`w-4 h-4 transition-transform ${
-                      showAdvanced ? "rotate-90" : ""
-                    }`}
-                  />
-                </button>
+              <ScrollArea className="flex-1 py-6 -mx-6 px-6">
+                <div className="space-y-6">
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="flex items-center gap-2 text-sm font-medium text-primary"
+                  >
+                    {showAdvanced ? "Hide" : "Show"} Advanced Settings
+                    <ArrowRight
+                      className={`w-4 h-4 transition-transform ${
+                        showAdvanced ? "rotate-90" : ""
+                      }`}
+                    />
+                  </button>
 
-                <AnimatePresence>
-                  {showAdvanced && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-6"
-                    >
-                      <div>
-                        <Label>Voice Reference</Label>
-                        <Input
-                          value={voiceReference}
-                          onChange={(e) => setVoiceReference(e.target.value)}
-                          placeholder="e.g., Like Elon Musk - bold and direct"
-                          className="mt-1.5"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Optional: Describe a public figure's communication style to mimic
-                        </p>
-                      </div>
-
-                      <div>
-                        <Label>Tone Preference</Label>
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                          {[
-                            { id: "conversational", label: "Casual/Conversational" },
-                            { id: "formal", label: "Formal/Corporate" },
-                            { id: "friendly", label: "Friendly/Approachable" },
-                            { id: "bold", label: "Bold/Contrarian" },
-                          ].map((t) => (
-                            <button
-                              key={t.id}
-                              onClick={() => setTone(t.id)}
-                              className={`p-3 rounded-lg border text-sm transition-colors ${
-                                tone === t.id
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50"
-                              }`}
-                            >
-                              {t.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label>Emoji Usage</Label>
-                        <div className="mt-3 px-2">
-                          <Slider
-                            value={emojiLevel}
-                            onValueChange={setEmojiLevel}
-                            max={3}
-                            step={1}
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-6"
+                      >
+                        <div>
+                          <Label>Voice Reference</Label>
+                          <Input
+                            value={voiceReference}
+                            onChange={(e) => setVoiceReference(e.target.value)}
+                            placeholder="e.g., Like Elon Musk - bold and direct"
+                            className="mt-1.5"
                           />
-                          <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                            <span>No emojis</span>
-                            <span>Minimal</span>
-                            <span>Moderate</span>
-                            <span>Lots</span>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Optional: Describe a public figure's communication style to mimic
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label>Tone Preference</Label>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            {[
+                              { id: "conversational", label: "Casual/Conversational" },
+                              { id: "formal", label: "Formal/Corporate" },
+                              { id: "friendly", label: "Friendly/Approachable" },
+                              { id: "bold", label: "Bold/Contrarian" },
+                            ].map((t) => (
+                              <button
+                                key={t.id}
+                                onClick={() => setTone(t.id)}
+                                className={`p-3 rounded-lg border text-sm transition-colors ${
+                                  tone === t.id
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50"
+                                }`}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
                           </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <Label>Post Length</Label>
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          {[
-                            { id: "short", label: "Short", desc: "50-100 words" },
-                            { id: "medium", label: "Medium", desc: "100-200 words" },
-                            { id: "long", label: "Long", desc: "200-300 words" },
-                          ].map((l) => (
-                            <button
-                              key={l.id}
-                              onClick={() => setPostLength(l.id)}
-                              className={`p-3 rounded-lg border text-center transition-colors ${
-                                postLength === l.id
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50"
-                              }`}
-                            >
-                              <p className="font-medium text-sm">{l.label}</p>
-                              <p className="text-xs text-muted-foreground">{l.desc}</p>
-                            </button>
-                          ))}
+                        <div>
+                          <Label>Emoji Usage</Label>
+                          <div className="mt-3 px-2">
+                            <Slider
+                              value={emojiLevel}
+                              onValueChange={setEmojiLevel}
+                              max={3}
+                              step={1}
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                              <span>No emojis</span>
+                              <span>Minimal</span>
+                              <span>Moderate</span>
+                              <span>Lots</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
 
-              <div className="flex justify-between">
+                        <div>
+                          <Label>Post Length</Label>
+                          <div className="grid grid-cols-3 gap-2 mt-2">
+                            {[
+                              { id: "short", label: "Short", desc: "50-100 words" },
+                              { id: "medium", label: "Medium", desc: "100-200 words" },
+                              { id: "long", label: "Long", desc: "200-300 words" },
+                            ].map((l) => (
+                              <button
+                                key={l.id}
+                                onClick={() => setPostLength(l.id)}
+                                className={`p-3 rounded-lg border text-center transition-colors ${
+                                  postLength === l.id
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50"
+                                }`}
+                              >
+                                <p className="font-medium text-sm">{l.label}</p>
+                                <p className="text-xs text-muted-foreground">{l.desc}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </ScrollArea>
+
+              <div className="flex justify-between flex-shrink-0 pt-4 border-t border-border">
                 <Button variant="ghost" onClick={() => setCreateStep(1)} className="gap-2">
                   <ArrowLeft className="w-4 h-4" />
                   Back
@@ -455,11 +483,11 @@ const AgentsPage = () => {
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
-            </>
+            </div>
           )}
 
           {createStep === 3 && (
-            <div className="flex flex-col h-[70vh]">
+            <div className="flex flex-col h-[75vh]">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>Tell Your Agent What to Create</DialogTitle>
                 <DialogDescription>
@@ -467,68 +495,133 @@ const AgentsPage = () => {
                 </DialogDescription>
               </DialogHeader>
 
-              {/* Chat messages */}
-              <div className="flex-1 overflow-y-auto py-4 space-y-4">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[80%] p-4 rounded-2xl ${
-                        message.role === "user"
-                          ? "gradient-bg text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <div className="flex-1 flex gap-4 min-h-0 mt-4">
+                {/* Chat Section */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Chat messages */}
+                  <ScrollArea className="flex-1 pr-4">
+                    <div className="space-y-4 pb-4">
+                      {messages.map((message, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`flex ${
+                            message.role === "user" ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[85%] p-4 rounded-2xl ${
+                              message.role === "user"
+                                ? "gradient-bg text-primary-foreground"
+                                : "bg-muted"
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          </div>
+                        </motion.div>
+                      ))}
+                      {isLoading && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="flex justify-start"
+                        >
+                          <div className="bg-muted p-4 rounded-2xl flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">Thinking...</span>
+                          </div>
+                        </motion.div>
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+                  </ScrollArea>
+
+                  {/* Chat input */}
+                  <div className="flex-shrink-0 border-t border-border pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <input
+                        type="checkbox"
+                        id="generatePhoto"
+                        checked={generatePhoto}
+                        onChange={(e) => setGeneratePhoto(e.target.checked)}
+                        className="rounded"
+                      />
+                      <label htmlFor="generatePhoto" className="text-sm flex items-center gap-1">
+                        <Sparkles className="w-4 h-4 text-secondary" />
+                        Generate photo with AI
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="icon" disabled={isLoading}>
+                        <Paperclip className="w-5 h-5" />
+                      </Button>
+                      <Input
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Say hi or ask me to create posts..."
+                        className="flex-1"
+                        disabled={isLoading}
+                      />
+                      <Button 
+                        variant="gradient" 
+                        size="icon" 
+                        onClick={handleSendMessage}
+                        disabled={isLoading || !chatInput.trim()}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Send className="w-5 h-5" />
+                        )}
+                      </Button>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Generated Posts Section */}
+                {generatedPosts.length > 0 && (
+                  <div className="w-[350px] flex-shrink-0 border-l border-border pl-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold">Generated Posts</h3>
+                      <span className="text-sm text-muted-foreground">
+                        {generatedPosts.length} posts
+                      </span>
+                    </div>
+                    <ScrollArea className="h-[calc(100%-80px)]">
+                      <div className="space-y-4 pr-4">
+                        {generatedPosts.map((post, index) => (
+                          <PostPreviewCard
+                            key={post.id}
+                            post={post}
+                            index={index}
+                            totalPosts={generatedPosts.length}
+                            onUpdate={(updates) => updatePost(post.id, updates)}
+                            onDelete={() => deletePost(post.id)}
+                            onRegenerate={() => regeneratePost(post.id)}
+                            isLoading={isLoading}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
               </div>
 
-              {/* Chat input */}
-              <div className="flex-shrink-0 border-t border-border pt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="checkbox"
-                    id="generatePhoto"
-                    checked={generatePhoto}
-                    onChange={(e) => setGeneratePhoto(e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="generatePhoto" className="text-sm flex items-center gap-1">
-                    <Sparkles className="w-4 h-4 text-secondary" />
-                    Generate photo with AI
-                  </label>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon">
-                    <Paperclip className="w-5 h-5" />
-                  </Button>
-                  <Input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Describe what posts you want..."
-                    className="flex-1"
-                  />
-                  <Button variant="gradient" size="icon" onClick={handleSendMessage}>
-                    <Send className="w-5 h-5" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex justify-between mt-4 flex-shrink-0">
+              <div className="flex justify-between mt-4 flex-shrink-0 pt-4 border-t border-border">
                 <Button variant="ghost" onClick={() => setCreateStep(2)} className="gap-2">
                   <ArrowLeft className="w-4 h-4" />
                   Back
                 </Button>
-                <Button variant="success" className="gap-2">
+                <Button 
+                  variant="success" 
+                  className="gap-2"
+                  onClick={handleScheduleAll}
+                  disabled={generatedPosts.length === 0}
+                >
                   <Check className="w-4 h-4" />
-                  Schedule All Posts
+                  Schedule All {generatedPosts.length > 0 ? `(${generatedPosts.length})` : ""} Posts
                 </Button>
               </div>
             </div>
