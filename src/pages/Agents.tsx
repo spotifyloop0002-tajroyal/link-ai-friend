@@ -362,121 +362,138 @@ const AgentsPage = () => {
           )}
 
           {createStep === 2 && (
-            <div className="flex flex-col h-[70vh] min-h-0">
-              <DialogHeader className="flex-shrink-0">
+            <div className="flex flex-col max-h-[75vh]">
+              <DialogHeader className="flex-shrink-0 pb-4">
                 <DialogTitle>Customize Your Agent</DialogTitle>
                 <DialogDescription>
                   Fine-tune how your agent creates content (optional)
                 </DialogDescription>
               </DialogHeader>
 
-              <ScrollArea className="flex-1 min-h-0 py-6 -mx-6 px-6">
-                <div className="space-y-6 pr-4">
-                  <button
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="flex items-center gap-2 text-sm font-medium text-primary"
-                  >
-                    {showAdvanced ? "Hide" : "Show"} Advanced Settings
-                    <ArrowRight
-                      className={`w-4 h-4 transition-transform ${
-                        showAdvanced ? "rotate-90" : ""
-                      }`}
-                    />
-                  </button>
+              {/* Scrollable content area with visible scrollbar */}
+              <div className="relative flex-1 min-h-0">
+                <div 
+                  className="overflow-y-auto max-h-[50vh] pr-4 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted"
+                  style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--primary) / 0.3) hsl(var(--muted))' }}
+                >
+                  <div className="space-y-6 pb-6">
+                    <button
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="flex items-center gap-2 text-sm font-medium text-primary"
+                    >
+                      {showAdvanced ? "Hide" : "Show"} Advanced Settings
+                      <ArrowRight
+                        className={`w-4 h-4 transition-transform ${
+                          showAdvanced ? "rotate-90" : ""
+                        }`}
+                      />
+                    </button>
 
-                  <AnimatePresence>
-                    {showAdvanced && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="space-y-6"
-                      >
-                        <div>
-                          <Label>Voice Reference</Label>
-                          <Input
-                            value={voiceReference}
-                            onChange={(e) => setVoiceReference(e.target.value)}
-                            placeholder="e.g., Like Elon Musk - bold and direct"
-                            className="mt-1.5"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Optional: Describe a public figure's communication style to mimic
-                          </p>
-                        </div>
-
-                        <div>
-                          <Label>Tone Preference</Label>
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                            {[
-                              { id: "conversational", label: "Casual/Conversational" },
-                              { id: "formal", label: "Formal/Corporate" },
-                              { id: "friendly", label: "Friendly/Approachable" },
-                              { id: "bold", label: "Bold/Contrarian" },
-                            ].map((t) => (
-                              <button
-                                key={t.id}
-                                onClick={() => setTone(t.id)}
-                                className={`p-3 rounded-lg border text-sm transition-colors ${
-                                  tone === t.id
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                }`}
-                              >
-                                {t.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <Label>Emoji Usage</Label>
-                          <div className="mt-3 px-2">
-                            <Slider
-                              value={emojiLevel}
-                              onValueChange={setEmojiLevel}
-                              max={3}
-                              step={1}
+                    <AnimatePresence>
+                      {showAdvanced && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-6"
+                        >
+                          <div>
+                            <Label>Voice Reference</Label>
+                            <Input
+                              value={voiceReference}
+                              onChange={(e) => setVoiceReference(e.target.value)}
+                              placeholder="e.g., Like Elon Musk - bold and direct"
+                              className="mt-1.5"
                             />
-                            <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                              <span>No emojis</span>
-                              <span>Minimal</span>
-                              <span>Moderate</span>
-                              <span>Lots</span>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Optional: Describe a public figure's communication style to mimic
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label>Tone Preference</Label>
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                              {[
+                                { id: "conversational", label: "Casual/Conversational" },
+                                { id: "formal", label: "Formal/Corporate" },
+                                { id: "friendly", label: "Friendly/Approachable" },
+                                { id: "bold", label: "Bold/Contrarian" },
+                              ].map((t) => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => setTone(t.id)}
+                                  className={`p-3 rounded-lg border text-sm transition-colors ${
+                                    tone === t.id
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border hover:border-primary/50"
+                                  }`}
+                                >
+                                  {t.label}
+                                </button>
+                              ))}
                             </div>
                           </div>
-                        </div>
 
-                        <div>
-                          <Label>Post Length</Label>
-                          <div className="grid grid-cols-3 gap-2 mt-2">
-                            {[
-                              { id: "short", label: "Short", desc: "50-100 words" },
-                              { id: "medium", label: "Medium", desc: "100-200 words" },
-                              { id: "long", label: "Long", desc: "200-300 words" },
-                            ].map((l) => (
-                              <button
-                                key={l.id}
-                                onClick={() => setPostLength(l.id)}
-                                className={`p-3 rounded-lg border text-center transition-colors ${
-                                  postLength === l.id
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                }`}
-                              >
-                                <p className="font-medium text-sm">{l.label}</p>
-                                <p className="text-xs text-muted-foreground">{l.desc}</p>
-                              </button>
-                            ))}
+                          <div>
+                            <Label>Emoji Usage</Label>
+                            <div className="mt-3 px-2">
+                              <Slider
+                                value={emojiLevel}
+                                onValueChange={setEmojiLevel}
+                                max={3}
+                                step={1}
+                              />
+                              <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                                <span>No emojis</span>
+                                <span>Minimal</span>
+                                <span>Moderate</span>
+                                <span>Lots</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </ScrollArea>
 
-              <div className="flex justify-between flex-shrink-0 pt-4 border-t border-border">
+                          <div>
+                            <Label>Post Length</Label>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                              {[
+                                { id: "short", label: "Short", desc: "50-100 words" },
+                                { id: "medium", label: "Medium", desc: "100-200 words" },
+                                { id: "long", label: "Long", desc: "200-300 words" },
+                              ].map((l) => (
+                                <button
+                                  key={l.id}
+                                  onClick={() => setPostLength(l.id)}
+                                  className={`p-3 rounded-lg border text-center transition-colors ${
+                                    postLength === l.id
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border hover:border-primary/50"
+                                  }`}
+                                >
+                                  <p className="font-medium text-sm">{l.label}</p>
+                                  <p className="text-xs text-muted-foreground">{l.desc}</p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Scroll indicator */}
+                          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-2">
+                            <span>Scroll down for more options</span>
+                            <ArrowRight className="w-3 h-3 rotate-90" />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+                
+                {/* Bottom fade gradient to indicate more content */}
+                {showAdvanced && (
+                  <div className="absolute bottom-0 left-0 right-4 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+                )}
+              </div>
+
+              <div className="flex justify-between flex-shrink-0 pt-4 mt-2 border-t border-border">
                 <Button variant="ghost" onClick={() => setCreateStep(1)} className="gap-2">
                   <ArrowLeft className="w-4 h-4" />
                   Back
