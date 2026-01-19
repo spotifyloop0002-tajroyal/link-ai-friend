@@ -98,8 +98,7 @@ const AgentsPage = () => {
   const currentUserContext = {
     name: "User",
     industry: "Technology",
-    company: "LinkedBot",
-    background: "Building innovative solutions",
+    // Don't include company/background - keep neutral for all users
   };
 
   // Agent chat hook
@@ -114,6 +113,13 @@ const AgentsPage = () => {
     regeneratePost,
     generateImageForPost,
   } = useAgentChat(currentAgentSettings, currentUserContext);
+
+  // Reset chat when agent type changes to show new welcome message
+  useEffect(() => {
+    if (selectedType && createStep === 3) {
+      resetChat();
+    }
+  }, [selectedType]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -509,9 +515,16 @@ const AgentsPage = () => {
           {createStep === 3 && (
             <div className="flex flex-col h-[75vh]">
               <DialogHeader className="flex-shrink-0">
-                <DialogTitle>Tell Your Agent What to Create</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  Tell Your Agent What to Create
+                  {selectedType && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-sm font-medium capitalize">
+                      {agentTypes.find(t => t.id === selectedType)?.label || selectedType}
+                    </span>
+                  )}
+                </DialogTitle>
                 <DialogDescription>
-                  Chat with your agent to generate posts
+                  Chat with your {agentTypes.find(t => t.id === selectedType)?.label?.toLowerCase() || 'content'} agent to generate posts
                 </DialogDescription>
               </DialogHeader>
 
