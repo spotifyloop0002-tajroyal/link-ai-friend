@@ -1,18 +1,18 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { ExtensionStatus } from "@/components/ExtensionStatus";
+import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import {
   Bot,
   Calendar,
-  Chrome,
   TrendingUp,
   Plus,
   Clock,
   Eye,
   Edit,
   Trash2,
-  CheckCircle,
-  AlertCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -30,14 +30,6 @@ const stats = [
     subtitle: "Scheduled in next 7 days",
     icon: Calendar,
     color: "from-secondary to-secondary/60",
-  },
-  {
-    label: "Chrome Extension",
-    value: "Connected",
-    subtitle: "Auto-posting enabled",
-    icon: Chrome,
-    color: "from-success to-success/60",
-    isConnected: true,
   },
   {
     label: "This Month's Reach",
@@ -85,10 +77,41 @@ const upcomingPosts = [
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const { isConnected, sendPendingPosts } = useLinkedBotExtension();
+
+  // Listen for extension events
+  useEffect(() => {
+    const handlePostPublished = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('✅ Post published:', customEvent.detail);
+      // TODO: Update post status in database
+    };
+
+    const handleAnalytics = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('📊 Analytics scraped:', customEvent.detail);
+      // TODO: Save analytics to database
+    };
+
+    window.addEventListener('linkedbot-post-published', handlePostPublished);
+    window.addEventListener('linkedbot-analytics-scraped', handleAnalytics);
+
+    return () => {
+      window.removeEventListener('linkedbot-post-published', handlePostPublished);
+      window.removeEventListener('linkedbot-analytics-scraped', handleAnalytics);
+    };
+  }, []);
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
+        {/* Extension Status */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <ExtensionStatus />
+        </motion.div>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -108,7 +131,7 @@ const DashboardPage = () => {
         </motion.div>
 
         {/* Stats grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {stats.map((stat, index) => (
             <motion.div
               key={index}
@@ -121,25 +144,6 @@ const DashboardPage = () => {
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}>
                   <stat.icon className="w-6 h-6 text-primary-foreground" />
                 </div>
-                {stat.isConnected !== undefined && (
-                  <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-                    stat.isConnected
-                      ? "bg-success/10 text-success"
-                      : "bg-destructive/10 text-destructive"
-                  }`}>
-                    {stat.isConnected ? (
-                      <>
-                        <CheckCircle className="w-3 h-3" />
-                        Connected
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-3 h-3" />
-                        Not Connected
-                      </>
-                    )}
-                  </span>
-                )}
               </div>
               <p className="text-2xl font-bold">{stat.value}</p>
               <p className="text-sm text-muted-foreground">{stat.subtitle}</p>
