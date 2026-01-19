@@ -33,6 +33,269 @@ interface ParsedAgentRequest {
   count: number;
 }
 
+// ========================================
+// AGENT TYPE PROMPTS - Detailed personality for each type
+// ========================================
+const AGENT_TYPE_PROMPTS: Record<string, { personality: string; guidelines: string[] }> = {
+  comedy: {
+    personality: `You are a comedy content creator for LinkedIn. Your posts are:
+- Witty and humorous but still professional
+- Use funny observations about work/business life
+- Self-deprecating humor when appropriate
+- Relatable situations that make people smile
+- Light-hearted takes on serious topics
+- Include jokes, puns, or funny analogies
+
+Tone: Playful, amusing, engaging
+Goal: Make people laugh while still providing value`,
+    guidelines: [
+      'Use emojis frequently (3-5 per post)',
+      'Keep it light but not offensive',
+      'Relate humor to professional context',
+      'End with engaging questions'
+    ]
+  },
+  
+  professional: {
+    personality: `You are a professional business content creator. Your posts are:
+- Formal and authoritative
+- Data-driven with facts and statistics
+- Industry-focused insights
+- Thought-provoking analysis
+- Educational and informative
+- Strategic thinking
+
+Tone: Professional, knowledgeable, credible
+Goal: Establish expertise and thought leadership`,
+    guidelines: [
+      'Minimal or no emojis',
+      'Include statistics and data when relevant',
+      'Cite sources when appropriate',
+      'Use professional vocabulary'
+    ]
+  },
+  
+  storytelling: {
+    personality: `You are a storytelling content creator. Your posts are:
+- Narrative-driven with clear beginning, middle, end
+- Personal experiences and lessons learned
+- Emotional and relatable
+- Use vivid descriptions
+- Character-focused (you, team members, clients)
+- Share failures, challenges, and victories
+
+Tone: Personal, authentic, engaging
+Goal: Connect emotionally through stories`,
+    guidelines: [
+      'Start with a hook',
+      'Use short sentences for impact',
+      'Include dialogue when relevant',
+      'End with lesson or reflection'
+    ]
+  },
+  
+  "thought-leadership": {
+    personality: `You are a thought leader sharing expert insights. Your posts are:
+- Forward-thinking and visionary
+- Challenge conventional wisdom
+- Predict trends and future scenarios
+- Based on deep expertise
+- Provoke discussion and debate
+- Offer unique perspectives
+
+Tone: Authoritative, visionary, provocative
+Goal: Establish as industry expert and influencer`,
+    guidelines: [
+      'Lead with bold statements',
+      'Back up with reasoning',
+      'Challenge status quo',
+      'Invite discussion'
+    ]
+  },
+  
+  motivational: {
+    personality: `You are a motivational content creator. Your posts are:
+- Inspirational and uplifting
+- Focus on mindset and personal growth
+- Encourage action and perseverance
+- Share wisdom and life lessons
+- Energetic and passionate
+- Empowering language
+
+Tone: Energetic, inspiring, encouraging
+Goal: Motivate audience to take action`,
+    guidelines: [
+      'Use power words (achieve, conquer, unleash)',
+      'Include calls to action',
+      'Emojis for emphasis',
+      'End with questions for engagement'
+    ]
+  },
+  
+  "data-analytics": {
+    personality: `You are a data-driven content creator. Your posts are:
+- Statistics-heavy and quantitative
+- Charts, graphs, and visualizations descriptions
+- Industry reports and surveys
+- Trend analysis with numbers
+- Research-backed insights
+- Comparative data points
+
+Tone: Analytical, factual, informative
+Goal: Inform with data and insights`,
+    guidelines: [
+      'Lead with numbers',
+      'Use data visualization emojis (📊📈)',
+      'Cite sources',
+      'Include percentages and statistics'
+    ]
+  },
+  
+  creative: {
+    personality: `You are a creative design-focused content creator. Your posts are:
+- Visually descriptive
+- Focus on aesthetics and design
+- Creative process insights
+- Before/after transformations
+- Design principles and trends
+- Visual storytelling
+
+Tone: Creative, artistic, inspiring
+Goal: Showcase creativity and design thinking`,
+    guidelines: [
+      'Use color emojis',
+      'Describe visual concepts',
+      'Reference design examples',
+      'Suggest visual content'
+    ]
+  },
+  
+  news: {
+    personality: `You are a company news/updates content creator. Your posts are:
+- Announcement-focused
+- Clear and concise
+- Newsworthy information
+- Milestones and achievements
+- Product launches and updates
+- Team announcements
+
+Tone: Professional, exciting, informative
+Goal: Share news effectively`,
+    guidelines: [
+      'Start with announcement',
+      'Include key details',
+      'Use celebration emojis',
+      'Thank the community'
+    ]
+  }
+};
+
+// ========================================
+// VOICE REFERENCE PROFILES - Famous figures' communication styles
+// ========================================
+const FAMOUS_VOICE_PROFILES: Record<string, {
+  tone_adjectives: string[];
+  sentence_style: string;
+  vocabulary: string;
+  common_phrases: string[];
+  emotional_tone: string;
+  example: string;
+}> = {
+  'elon musk': {
+    tone_adjectives: ['bold', 'direct', 'visionary', 'irreverent'],
+    sentence_style: 'Short, punchy, often fragmented sentences',
+    vocabulary: 'Technical but simple, first-principles thinking',
+    common_phrases: ['fundamental', 'obviously', 'the thing is', 'literally'],
+    emotional_tone: 'Confident, slightly provocative, passionate about mission',
+    example: 'Physics says it\'s possible. Engineering says it\'s hard. Economics says it\'s worth it. Let\'s do it.'
+  },
+  
+  'gary vaynerchuk': {
+    tone_adjectives: ['energetic', 'real', 'aggressive', 'authentic'],
+    sentence_style: 'Rapid-fire, conversational, lots of emphasis',
+    vocabulary: 'Street-smart, blunt, contemporary slang',
+    common_phrases: ['listen', 'the reality is', 'you need to understand', 'bro'],
+    emotional_tone: 'Intense, passionate, no-nonsense',
+    example: 'Listen. You\'re worried about what people think? NOBODY IS THINKING ABOUT YOU. They\'re worried about themselves. So go execute.'
+  },
+  
+  'simon sinek': {
+    tone_adjectives: ['thoughtful', 'inspiring', 'philosophical', 'calm'],
+    sentence_style: 'Measured, clear, builds to insights',
+    vocabulary: 'Simple but profound, metaphor-rich',
+    common_phrases: ['the thing is', 'it turns out', 'here\'s the thing', 'start with why'],
+    emotional_tone: 'Warm, inspiring, introspective',
+    example: 'People don\'t buy what you do. They buy why you do it. And what you do simply proves what you believe.'
+  },
+  
+  'sheryl sandberg': {
+    tone_adjectives: ['professional', 'empowering', 'data-driven', 'warm'],
+    sentence_style: 'Clear, structured, persuasive',
+    vocabulary: 'Business-focused, empowerment language',
+    common_phrases: ['research shows', 'it\'s important to', 'we need to', 'lean in'],
+    emotional_tone: 'Confident but approachable, encouraging',
+    example: 'We cannot change what we are not aware of, and once we are aware, we cannot help but change.'
+  },
+  
+  'virat kohli': {
+    tone_adjectives: ['passionate', 'aggressive', 'motivational', 'intense'],
+    sentence_style: 'Direct, powerful, emphatic',
+    vocabulary: 'Sports metaphors, victory language, determination',
+    common_phrases: ['give your 100%', 'never give up', 'believe in yourself', 'chase your dreams'],
+    emotional_tone: 'Fiery, determined, championship mentality',
+    example: 'Self-belief and hard work will always earn you success. Never settle for anything less than your best.'
+  },
+  
+  'naval ravikant': {
+    tone_adjectives: ['philosophical', 'minimalist', 'wise', 'contrarian'],
+    sentence_style: 'Aphoristic, tweet-like, dense with meaning',
+    vocabulary: 'Philosophical, startup/investing terms, wisdom',
+    common_phrases: ['specific knowledge', 'leverage', 'the way to get rich'],
+    emotional_tone: 'Calm, detached, philosophical',
+    example: 'Seek wealth, not money or status. Wealth is having assets that earn while you sleep.'
+  },
+  
+  'brené brown': {
+    tone_adjectives: ['vulnerable', 'empathetic', 'research-driven', 'warm'],
+    sentence_style: 'Conversational, story-driven, emotionally resonant',
+    vocabulary: 'Psychology terms made accessible, emotional language',
+    common_phrases: ['vulnerability is', 'shame resilience', 'wholehearted', 'courage'],
+    emotional_tone: 'Warm, vulnerable, encouraging',
+    example: 'Vulnerability is not winning or losing; it\'s having the courage to show up when you can\'t control the outcome.'
+  },
+  
+  'steve jobs': {
+    tone_adjectives: ['visionary', 'perfectionist', 'inspirational', 'demanding'],
+    sentence_style: 'Simple, dramatic pauses, building to revelation',
+    vocabulary: 'Design-focused, revolutionary, simple words',
+    common_phrases: ['one more thing', 'insanely great', 'think different', 'it just works'],
+    emotional_tone: 'Passionate, dramatic, product-obsessed',
+    example: 'Design is not just what it looks like and feels like. Design is how it works.'
+  },
+  
+  'oprah winfrey': {
+    tone_adjectives: ['empathetic', 'uplifting', 'authentic', 'spiritual'],
+    sentence_style: 'Personal, conversational, builds connection',
+    vocabulary: 'Accessible, emotional, self-help focused',
+    common_phrases: ['your truth', 'live your best life', 'aha moment', 'what I know for sure'],
+    emotional_tone: 'Warm, encouraging, deeply personal',
+    example: 'Turn your wounds into wisdom. What I know for sure is that speaking your truth is the most powerful tool we all have.'
+  },
+  
+  'richard branson': {
+    tone_adjectives: ['adventurous', 'fun', 'unconventional', 'optimistic'],
+    sentence_style: 'Light, energetic, story-driven',
+    vocabulary: 'Adventure terms, fun, business with personality',
+    common_phrases: ['screw it, let\'s do it', 'business should be fun', 'adventure'],
+    emotional_tone: 'Playful, optimistic, risk-embracing',
+    example: 'Business opportunities are like buses, there\'s always another one coming. Screw it, let\'s do it!'
+  }
+};
+
+// ========================================
+// HELPER FUNCTIONS
+// ========================================
+
 function fallbackDetectPostGenerationIntent(message: string): boolean {
   const triggers = [
     "create",
@@ -67,24 +330,8 @@ function looksLikeNoTopic(topic: string): boolean {
   if (/\b(show me|here|topic|please)\b/i.test(lowered)) return true;
 
   const stop = new Set([
-    "the",
-    "a",
-    "an",
-    "and",
-    "show",
-    "me",
-    "here",
-    "topic",
-    "please",
-    "create",
-    "generate",
-    "write",
-    "make",
-    "posts",
-    "post",
-    "content",
-    "draft",
-    "drafts",
+    "the", "a", "an", "and", "show", "me", "here", "topic", "please",
+    "create", "generate", "write", "make", "posts", "post", "content", "draft", "drafts",
   ]);
   const remaining = lowered
     .split(/\s+/)
@@ -110,7 +357,6 @@ function fallbackExtractTopic(message: string): string | null {
     }
   }
 
-  // Last resort: try to remove common filler and see if anything meaningful remains.
   const rough = message
     .replace(/^(create|generate|write|make|please|can you|could you|i want|i need)\s*/gi, "")
     .replace(/\s*(posts?|content|articles?|drafts?)\s*/gi, " ")
@@ -125,13 +371,7 @@ function fallbackExtractTopic(message: string): string | null {
 }
 
 async function parseAgentRequest(
-  {
-    message,
-    history,
-  }: {
-    message: string;
-    history: ChatMessage[];
-  },
+  { message, history }: { message: string; history: ChatMessage[] },
   apiKey: string,
 ): Promise<ParsedAgentRequest> {
   const fallback: ParsedAgentRequest = {
@@ -140,7 +380,6 @@ async function parseAgentRequest(
     count: fallbackExtractCount(message),
   };
 
-  // Keep it cheap: only parse with AI when the message *might* be asking for generation.
   if (fallback.action !== "generate_posts") return fallback;
 
   const recent = history.slice(-6).map((m) => `${m.role}: ${m.content}`).join("\n");
@@ -219,7 +458,6 @@ async function parseAgentRequest(
   }
 }
 
-// Get emoji config based on level
 function getEmojiConfig(level: number): string {
   switch (level) {
     case 0: return "Do not use any emojis at all";
@@ -230,7 +468,6 @@ function getEmojiConfig(level: number): string {
   }
 }
 
-// Get post length config
 function getPostLengthConfig(length: string): string {
   switch (length) {
     case "short": return "50-100 words - punchy and concise";
@@ -240,20 +477,51 @@ function getPostLengthConfig(length: string): string {
   }
 }
 
-// Get agent type description
-function getAgentTypeDescription(type: string): string {
-  const types: Record<string, string> = {
-    "comedy": "Write with humor, wit, and entertaining observations. Use clever wordplay.",
-    "professional": "Write formally with industry expertise. Focus on insights and value.",
-    "storytelling": "Use narrative arcs, personal anecdotes, and emotional hooks.",
-    "thought-leadership": "Share bold opinions, predictions, and contrarian viewpoints.",
-    "motivational": "Be inspirational, uplifting, and encouraging. Share lessons learned.",
-    "data-analytics": "Lead with statistics, research findings, and data-driven insights.",
-    "creative": "Be artistic, visual-focused, and design-oriented.",
-    "news": "Share timely updates, announcements, and industry news.",
-  };
-  return types[type] || types["professional"];
+function getAgentTypePrompt(type: string): { personality: string; guidelines: string[] } {
+  const normalizedType = type.toLowerCase().replace(/\s+/g, '-');
+  return AGENT_TYPE_PROMPTS[normalizedType] || AGENT_TYPE_PROMPTS["professional"];
 }
+
+function getVoiceProfile(voiceReference: string | undefined): typeof FAMOUS_VOICE_PROFILES[string] | null {
+  if (!voiceReference) return null;
+  
+  const normalized = voiceReference.toLowerCase().trim();
+  
+  // Check for exact match
+  if (FAMOUS_VOICE_PROFILES[normalized]) {
+    return FAMOUS_VOICE_PROFILES[normalized];
+  }
+  
+  // Check for partial match
+  for (const [name, profile] of Object.entries(FAMOUS_VOICE_PROFILES)) {
+    if (normalized.includes(name) || name.includes(normalized)) {
+      return profile;
+    }
+  }
+  
+  return null;
+}
+
+function buildVoiceReferencePrompt(voiceReference: string, profile: typeof FAMOUS_VOICE_PROFILES[string]): string {
+  return `
+IMPORTANT: Mimic the communication style of ${voiceReference}
+
+Voice Profile:
+- Tone: ${profile.tone_adjectives.join(', ')}
+- Sentence Style: ${profile.sentence_style}
+- Vocabulary: ${profile.vocabulary}
+- Common Phrases: ${profile.common_phrases.join(', ')}
+- Emotional Tone: ${profile.emotional_tone}
+
+Example of their style:
+"${profile.example}"
+
+Write in THIS style while maintaining the agent personality.`;
+}
+
+// ========================================
+// MAIN HANDLER
+// ========================================
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -297,7 +565,13 @@ serve(async (req) => {
       
       console.log(`Generating ${count} posts about: ${topic}`);
       
-      // Step 1: Research the topic using Gemini
+      // Get agent type personality
+      const agentTypeConfig = getAgentTypePrompt(agentSettings.type);
+      
+      // Get voice profile if provided
+      const voiceProfile = getVoiceProfile(agentSettings.voiceReference);
+      
+      // Step 1: Research the topic
       const researchPrompt = `You are a LinkedIn content researcher. Research the latest trends, news, and insights about: "${topic}"
 
 Provide a research summary including:
@@ -317,9 +591,7 @@ Format as a concise research brief that can be used to write engaging LinkedIn p
         },
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "user", content: researchPrompt }
-          ],
+          messages: [{ role: "user", content: researchPrompt }],
         }),
       });
 
@@ -343,38 +615,48 @@ Format as a concise research brief that can be used to write engaging LinkedIn p
       const researchData = await researchResponse.json();
       const researchInsights = researchData.choices?.[0]?.message?.content || "";
 
-      // Step 2: Generate posts using research
+      // Step 2: Build comprehensive post generation prompt
+      const voicePromptSection = voiceProfile && agentSettings.voiceReference 
+        ? buildVoiceReferencePrompt(agentSettings.voiceReference, voiceProfile)
+        : "";
+
       const postGenerationPrompt = `Generate exactly ${count} unique, engaging LinkedIn posts about: "${topic}"
 
-RESEARCH INSIGHTS TO USE:
+=== AGENT PERSONALITY ===
+${agentTypeConfig.personality}
+
+Guidelines for this agent type:
+${agentTypeConfig.guidelines.map(g => `• ${g}`).join('\n')}
+
+${voicePromptSection}
+
+=== RESEARCH INSIGHTS TO USE ===
 ${researchInsights}
 
-USER CONTEXT (use ONLY if relevant to the topic):
+=== USER CONTEXT (use if relevant) ===
 - Industry: ${userContext.industry || 'Technology'}
-${userContext.company ? `- Company: ${userContext.company}` : ''}
-${userContext.background ? `- Background: ${userContext.background}` : ''}
+${userContext.name ? `- Name: ${userContext.name}` : ''}
 
-AGENT STYLE REQUIREMENTS:
-- Agent Type: ${agentSettings.type || 'professional'}
-- Style Guide: ${getAgentTypeDescription(agentSettings.type)}
-- Tone: ${agentSettings.tone || 'conversational'}
-${agentSettings.voiceReference ? `- Voice Style: Write like ${agentSettings.voiceReference}` : ''}
+=== STYLE SETTINGS ===
 - Emoji Usage: ${getEmojiConfig(agentSettings.emojiLevel)}
 - Post Length: ${getPostLengthConfig(agentSettings.postLength)}
+- Tone: ${agentSettings.tone || 'conversational'}
 
-CRITICAL POST REQUIREMENTS:
+=== CRITICAL POST REQUIREMENTS ===
 1. Each post MUST be unique with a different angle/hook
 2. Use the research insights to add value and credibility
 3. Format properly for LinkedIn (use line breaks for readability)
 4. Include 2-4 relevant hashtags at the end
 5. End with a question or call-to-action to drive engagement
 6. Make it feel authentic, not AI-generated
-7. NEVER mention "LinkedBot" or any specific product name - write GENERIC posts that the user can personalize
-8. Write as if YOU are the user sharing their own thoughts/insights - use first person "I", "we", "my experience"
+7. NEVER mention any specific product or company name unless user explicitly mentioned it
+8. Write as if YOU are the user sharing their own thoughts - use first person "I", "we", "my experience"
 9. Keep posts versatile so they work for any professional in the industry
-10. DO NOT promote any specific company or tool unless the user explicitly mentioned it in the topic
+10. STRICTLY follow the agent personality type: ${agentSettings.type}
+${voiceProfile ? `11. STRICTLY mimic the voice style of ${agentSettings.voiceReference}` : ''}
 
-POSTING TIMES - assign each post one of these optimal times:
+=== POSTING TIMES ===
+Assign each post one of these optimal times:
 - "morning" (8-10 AM) - Best for B2B, professional insights
 - "lunch" (12-1 PM) - Good for quick tips, motivation
 - "afternoon" (3-5 PM) - Best for thought-provoking content
@@ -400,7 +682,7 @@ Return ONLY a valid JSON array (no markdown, no explanation):
           messages: [
             { 
               role: "system", 
-              content: "You are a LinkedIn content expert. Generate posts in the exact JSON format requested. Return ONLY valid JSON array, no markdown code blocks." 
+              content: "You are a LinkedIn content expert. Generate posts in the exact JSON format requested. Return ONLY valid JSON array, no markdown code blocks. STRICTLY follow the agent personality type and voice reference if provided." 
             },
             { role: "user", content: postGenerationPrompt }
           ],
@@ -429,7 +711,6 @@ Return ONLY a valid JSON array (no markdown, no explanation):
             posts = JSON.parse(jsonMatch[0]);
           } catch (e2) {
             console.error("Second parse failed:", e2);
-            // Return error message
             return new Response(JSON.stringify({
               type: "message",
               message: "I had trouble generating the posts. Could you try rephrasing your request? For example: 'Create 5 posts about AI trends'"
@@ -489,32 +770,39 @@ Return ONLY a valid JSON array (no markdown, no explanation):
       });
     }
 
-    // Normal conversation (not generating posts)
-    const conversationPrompt = `You are a friendly, helpful LinkedIn content assistant.
+    // ========================================
+    // CONVERSATION MODE (not generating posts)
+    // ========================================
+    
+    // Get agent type for conversation personality
+    const agentTypeConfig = getAgentTypePrompt(agentSettings.type);
+    const voiceProfile = getVoiceProfile(agentSettings.voiceReference);
+    
+    const conversationPrompt = `You are a friendly LinkedIn content assistant with a specific personality.
 
-USER CONTEXT:
+=== YOUR AGENT PERSONALITY ===
+${agentTypeConfig.personality}
+
+${voiceProfile && agentSettings.voiceReference ? buildVoiceReferencePrompt(agentSettings.voiceReference, voiceProfile) : ''}
+
+=== USER CONTEXT ===
 - Name: ${userContext.name || 'there'}
 ${userContext.industry ? `- Industry: ${userContext.industry}` : ''}
-${userContext.company ? `- Company: ${userContext.company}` : ''}
 
-YOUR PERSONALITY:
-- Friendly and conversational, not robotic
-- Use occasional emojis but don't overdo it
-- Be concise but helpful
-- Always guide users toward creating content
-
-CRITICAL RULES:
-1. NEVER mention "LinkedBot" or any specific product name
+=== CRITICAL RULES ===
+1. NEVER mention any specific product or company name
 2. You are a NEUTRAL assistant helping the user create posts for THEIR OWN LinkedIn profile
 3. Keep suggestions generic and versatile
-4. Focus on the USER's ideas and topics, not promoting any tool
+4. Focus on the USER's ideas and topics
+5. Stay in character with your agent personality type: ${agentSettings.type}
 
-CONVERSATION RULES:
-1. If user says "hi", "hello", "hey" → Greet warmly, introduce yourself briefly, ask what they'd like to post about
-2. If user asks what you can do → List your capabilities clearly
-3. If user asks for topic ideas → Suggest 4-5 trending topics relevant to their industry
+=== CONVERSATION RULES ===
+1. If user says "hi", "hello", "hey" → Greet warmly in your personality style, introduce yourself briefly, ask what they'd like to post about
+2. If user asks what you can do → List your capabilities in your personality style
+3. If user asks for topic ideas → Suggest 4-5 trending topics relevant to their industry in your personality style
 4. If user seems unsure → Ask clarifying questions to help them decide
 5. Keep responses concise (2-4 short paragraphs max)
+6. Match your personality type in how you respond
 
 NEVER generate posts in conversation mode. Only provide posts when user explicitly asks with words like "create", "generate", "write" posts.
 
@@ -523,7 +811,7 @@ ${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}
 
 User's message: "${message}"
 
-Respond naturally:`;
+Respond naturally in your ${agentSettings.type} personality:`;
 
     const chatResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -533,9 +821,7 @@ Respond naturally:`;
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "user", content: conversationPrompt }
-        ],
+        messages: [{ role: "user", content: conversationPrompt }],
       }),
     });
 
