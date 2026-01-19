@@ -362,7 +362,7 @@ const AgentsPage = () => {
           )}
 
           {createStep === 2 && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col max-h-[70vh]">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>Customize Your Agent</DialogTitle>
                 <DialogDescription>
@@ -370,8 +370,8 @@ const AgentsPage = () => {
                 </DialogDescription>
               </DialogHeader>
 
-              <ScrollArea className="flex-1 py-6 -mx-6 px-6">
-                <div className="space-y-6">
+              <ScrollArea className="flex-1 min-h-0 py-6 -mx-6 px-6">
+                <div className="space-y-6 pr-4">
                   <button
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     className="flex items-center gap-2 text-sm font-medium text-primary"
