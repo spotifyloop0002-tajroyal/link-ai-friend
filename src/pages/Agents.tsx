@@ -362,7 +362,7 @@ const AgentsPage = () => {
           )}
 
           {createStep === 2 && (
-            <div className="flex flex-col max-h-[70vh]">
+            <div className="flex flex-col h-[70vh] min-h-0">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>Customize Your Agent</DialogTitle>
                 <DialogDescription>
