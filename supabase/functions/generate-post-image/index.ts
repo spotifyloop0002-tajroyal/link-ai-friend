@@ -5,6 +5,60 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Generate intelligent image prompt from actual post content
+function generateImagePromptFromPost(postContent: string): string {
+  // Extract the first meaningful line
+  const lines = postContent.split('\n').filter(line => line.trim().length > 0);
+  const firstLine = lines[0]?.trim() || 'Professional business content';
+  
+  // Clean topic: remove emojis and special characters
+  const cleanTopic = firstLine
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+    .replace(/[^\w\s.,!?-]/g, '')
+    .trim()
+    .substring(0, 150);
+  
+  // Extract key themes from the post
+  const themes: string[] = [];
+  const lowerContent = postContent.toLowerCase();
+  
+  if (lowerContent.includes('ai') || lowerContent.includes('artificial intelligence')) {
+    themes.push('artificial intelligence, neural networks');
+  }
+  if (lowerContent.includes('car') || lowerContent.includes('automotive') || lowerContent.includes('vehicle')) {
+    themes.push('automotive industry, vehicles');
+  }
+  if (lowerContent.includes('tech') || lowerContent.includes('software') || lowerContent.includes('code')) {
+    themes.push('technology, digital innovation');
+  }
+  if (lowerContent.includes('leader') || lowerContent.includes('leadership')) {
+    themes.push('leadership, business excellence');
+  }
+  if (lowerContent.includes('health') || lowerContent.includes('medical')) {
+    themes.push('healthcare, medical technology');
+  }
+  if (lowerContent.includes('future') || lowerContent.includes('innovation')) {
+    themes.push('futuristic, cutting-edge');
+  }
+  if (lowerContent.includes('electric') || lowerContent.includes('ev') || lowerContent.includes('battery')) {
+    themes.push('electric vehicles, sustainability');
+  }
+  if (lowerContent.includes('autonomous') || lowerContent.includes('self-driving')) {
+    themes.push('autonomous technology, robotics');
+  }
+  
+  const themeString = themes.length > 0 ? themes.join(', ') : 'professional business, corporate';
+  
+  return `Create a professional LinkedIn social media post image.
+Topic: ${cleanTopic}
+Visual themes: ${themeString}
+Style: Modern, business professional, clean and polished design
+Colors: Professional blue tones (#0A66C2), white backgrounds, subtle gradients
+Layout: Clean composition with visual elements representing the topic
+Format: Optimized for LinkedIn feed (1200x630 aspect ratio conceptually)
+Requirements: NO TEXT OVERLAY, visually represent the concept through abstract shapes, icons, or professional imagery. Minimalist but impactful.`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -21,11 +75,10 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Generate image prompt if not provided
-    const imagePrompt = prompt || `Create a professional, clean LinkedIn post image that represents: ${postContent.substring(0, 200)}. 
-Style: Modern, minimalist, business professional. 
-Colors: Blue tones, professional palette.
-No text overlay, just visual representation of the concept.`;
+    // Generate intelligent image prompt from actual post content if not provided
+    const imagePrompt = prompt || generateImagePromptFromPost(postContent);
+
+    console.log("Using image prompt:", imagePrompt.substring(0, 200));
 
     console.log("Generating image with prompt:", imagePrompt.substring(0, 100));
 
