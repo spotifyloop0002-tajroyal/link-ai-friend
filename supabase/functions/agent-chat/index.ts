@@ -100,27 +100,16 @@ function extractTopicFromMessage(message: string): string | null {
   return cleaned.length > 2 ? cleaned : null;
 }
 
-function extractCountFromMessage(message: string): number {
-  const match = message.match(/(\d+)\s*(?:posts?|drafts?)/i);
-  if (match) {
-    const n = parseInt(match[1], 10);
-    return Math.min(Math.max(n, 1), 10);
-  }
-  
-  if (/(single|one)\s+(post|draft)/i.test(message.toLowerCase())) return 1;
-  return 5; // Default
-}
-
 function isPostGenerationRequest(message: string): boolean {
   const lower = message.toLowerCase();
-  const triggers = ["create", "generate", "write", "make", "draft"];
+  const triggers = ["create", "generate", "write", "make", "draft", "post about"];
   const hasTrigger = triggers.some(t => lower.includes(t));
   const mentionsPost = lower.includes("post") || lower.includes("content");
   
   // Also match "post about X" pattern
   if (/^(post|posts)\s+(about|on|regarding)\b/.test(lower)) return true;
   
-  return hasTrigger && mentionsPost;
+  return hasTrigger || (hasTrigger && mentionsPost);
 }
 
 serve(async (req) => {
@@ -137,8 +126,6 @@ serve(async (req) => {
     }
 
     const settings: AgentSettings = agentSettings || { type: "professional", tone: "conversational", emojiLevel: 2, postLength: "medium" };
-    const context: UserContext = userContext || {};
-    
     const agentConfig = AGENT_TYPE_PROMPTS[settings.type] || AGENT_TYPE_PROMPTS.professional;
 
     // Build system prompt - SIMPLE: only generate posts, never claim to post
@@ -180,17 +167,16 @@ CRITICAL RULES:
     // Check if this is a post generation request
     const isGeneration = isPostGenerationRequest(message);
     const topic = extractTopicFromMessage(message);
-    const count = extractCountFromMessage(message);
 
-    // Call Lovable AI
-    const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    // Call Lovable AI using the correct endpoint
+    const response = await fetch("https://lovable.dev/api/llm/chat", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "openai/gpt-4o-mini",
         messages: messages,
         max_tokens: 2048,
       }),
@@ -198,22 +184,18 @@ CRITICAL RULES:
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error("API Error:", response.status, errorText);
       throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const assistantMessage = data.choices[0]?.message?.content || "I encountered an issue. Please try again.";
+    const assistantMessage = data.choices?.[0]?.message?.content || data.content || "I encountered an issue. Please try again.";
 
-    // If this was a generation request and we got content, structure it as posts
+    // If this was a generation request, structure it as posts
     let responseType = "message";
     let posts: any[] = [];
 
     if (isGeneration && topic) {
-      // Generate multiple posts if requested
-      const postCount = Math.min(count, 5);
-      
-      // For now, treat the response as a single post
-      // In future, could call API multiple times for multiple posts
       posts = [{
         id: `post-${Date.now()}`,
         content: assistantMessage,
