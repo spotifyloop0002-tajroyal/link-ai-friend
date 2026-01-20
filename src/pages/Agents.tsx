@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
+import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 
@@ -127,6 +128,10 @@ const AgentsPage = () => {
   const [isScheduling, setIsScheduling] = useState(false);
   const [isPostingNow, setIsPostingNow] = useState(false);
   const [awaitingScheduleTime, setAwaitingScheduleTime] = useState(false);
+  const [pendingTopic, setPendingTopic] = useState<string | null>(null); // for ask_count flow
+
+  // Extension activity log
+  const { entries: activityEntries, addEntry: addActivityEntry, clearLog: clearActivityLog } = useExtensionActivityLog();
 
   const parseRequestedScheduleTimeIso = (text: string): string | null => {
     const match = text.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
@@ -151,6 +156,7 @@ const AgentsPage = () => {
   const postSingleNow = async (post: { id: string; content: string; imageUrl?: string }) => {
     if (!isExtensionConnected) {
       toast.error("Chrome extension not connected. Please connect from Dashboard first.");
+      addActivityEntry("failed", "Extension not connected");
       return;
     }
     if (!post.content?.trim()) {
@@ -159,6 +165,7 @@ const AgentsPage = () => {
     }
 
     setIsPostingNow(true);
+    addActivityEntry("sending", "Sending post to extension...", post.id);
     try {
       const result = await postNow({
         id: post.id,
@@ -168,12 +175,15 @@ const AgentsPage = () => {
       });
 
       if (result?.success) {
+        addActivityEntry("queued", "Post queued for immediate publish", post.id);
         toast.success("Posted to LinkedIn via extension!");
       } else {
+        addActivityEntry("failed", result?.error || "Post failed", post.id);
         toast.error(result?.error || "Failed to post via extension.");
       }
     } catch (error) {
       console.error("Error posting now:", error);
+      addActivityEntry("failed", "Extension error", post.id);
       toast.error("Failed to post via extension.");
     } finally {
       setIsPostingNow(false);
@@ -186,10 +196,12 @@ const AgentsPage = () => {
   ) => {
     if (!isExtensionConnected) {
       toast.error("Chrome extension not connected. Please connect from Dashboard first.");
+      addActivityEntry("failed", "Extension not connected");
       return;
     }
 
     setIsScheduling(true);
+    addActivityEntry("sending", "Sending post to extension...", post.id);
     try {
       const result = await sendPendingPosts([
         {
@@ -201,12 +213,15 @@ const AgentsPage = () => {
       ]);
 
       if (result.success) {
+        addActivityEntry("queued", "Post scheduled in extension", post.id);
         toast.success("Sent to extension for scheduled posting!");
       } else {
+        addActivityEntry("failed", result.error || "Schedule failed", post.id);
         toast.error(result.error || "Failed to send post to extension.");
       }
     } catch (error) {
       console.error("Error scheduling post:", error);
+      addActivityEntry("failed", "Extension error", post.id);
       toast.error("Failed to send post to extension.");
     } finally {
       setIsScheduling(false);
@@ -252,9 +267,16 @@ const AgentsPage = () => {
       return;
     }
 
+    // Agent is asking how many posts
+    if (result?.type === "ask_count") {
+      setPendingTopic(result.topic);
+      return;
+    }
+
     // Handle post_now response - immediately post the first available post
     if (result?.type === "post_now" && generatedPosts.length > 0) {
       setAwaitingScheduleTime(false);
+      setPendingTopic(null);
       const first = generatedPosts[0];
       await postSingleNow(first);
       return;
@@ -263,9 +285,15 @@ const AgentsPage = () => {
     // Handle schedule_post response - schedule the first available post
     if (result?.type === "schedule_post" && generatedPosts.length > 0) {
       setAwaitingScheduleTime(false);
+      setPendingTopic(null);
       const first = generatedPosts[0];
       await scheduleSingle(first, result.scheduledTime);
       return;
+    }
+
+    // If posts were generated, reset pending topic
+    if (result?.type === "posts_generated") {
+      setPendingTopic(null);
     }
   };
 
@@ -306,11 +334,13 @@ const AgentsPage = () => {
 
     if (!isExtensionConnected) {
       toast.error("Chrome extension not connected. Please connect from Dashboard first.");
+      addActivityEntry("failed", "Extension not connected");
       return;
     }
 
     setIsScheduling(true);
-    
+    addActivityEntry("sending", `Sending ${generatedPosts.length} posts to extension...`);
+
     try {
       // Format posts for extension
       const postsForExtension = generatedPosts.map((post) => ({
@@ -322,16 +352,19 @@ const AgentsPage = () => {
 
       // Send to extension (now returns result instead of throwing)
       const result = await sendPendingPosts(postsForExtension);
-      
+
       if (result.success) {
+        addActivityEntry("queued", `${generatedPosts.length} posts scheduled in extension`);
         toast.success(`Sent ${generatedPosts.length} posts to extension for LinkedIn posting!`);
         setShowCreateModal(false);
         resetModal();
       } else {
+        addActivityEntry("failed", result.error || "Bulk schedule failed");
         toast.error(result.error || "Failed to send posts to extension.");
       }
     } catch (error) {
       console.error("Error scheduling posts:", error);
+      addActivityEntry("failed", "Extension error during bulk schedule");
       toast.error("Failed to send posts to extension. Please try again.");
     } finally {
       setIsScheduling(false);
@@ -782,14 +815,14 @@ const AgentsPage = () => {
 
                 {/* Generated Posts Section */}
                 {generatedPosts.length > 0 && (
-                  <div className="w-[350px] flex-shrink-0 border-l border-border pl-4">
+                  <div className="w-[350px] flex-shrink-0 border-l border-border pl-4 flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">Generated Posts</h3>
                       <span className="text-sm text-muted-foreground">
                         {generatedPosts.length} posts
                       </span>
                     </div>
-                    <ScrollArea className="h-[calc(100%-80px)]">
+                    <ScrollArea className="flex-1 min-h-0">
                       <div className="space-y-4 pr-4">
                         {generatedPosts.map((post, index) => (
                           <PostPreviewCard
@@ -806,6 +839,11 @@ const AgentsPage = () => {
                         ))}
                       </div>
                     </ScrollArea>
+
+                    {/* Extension Activity Log */}
+                    <div className="border-t border-border pt-3 mt-3 h-[160px]">
+                      <ExtensionActivityLog entries={activityEntries} onClear={clearActivityLog} />
+                    </div>
                   </div>
                 )}
               </div>

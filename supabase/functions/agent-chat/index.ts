@@ -733,16 +733,31 @@ serve(async (req) => {
       const topic = parsed.topic;
       const count = parsed.count;
 
+      // Missing topic? Ask user.
       if (!topic) {
         return new Response(
           JSON.stringify({
             type: "message",
             message:
-              "I can do that — what topic should the posts be about?\n\nExamples:\n• Create 5 posts about AI trends\n• Create 3 posts about AI tools for small business\n• Create 10 posts about recruiting with AI",
+              "I can do that — what topic should the posts be about?\n\nExamples:\n• AI trends\n• Recruiting with AI\n• Leadership lessons",
           }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // We have a topic but no explicit count. Ask user for count rather than default.
+      const userExplicitlySpecifiedCount =
+        /\b\d+\s*(posts?|drafts?)\b/i.test(message) ||
+        /(single|one|1)\s*(post|draft)/i.test(message);
+
+      if (!userExplicitlySpecifiedCount) {
+        return new Response(
+          JSON.stringify({
+            type: "ask_count",
+            message: `Great topic! How many posts should I create about "${topic}"?\n\n(Just say a number from 1–10, e.g., "3" or "5 posts")`,
+            topic,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       

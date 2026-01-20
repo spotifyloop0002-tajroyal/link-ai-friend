@@ -39,7 +39,8 @@ export type AgentChatResponse =
   | { type: "posts_generated"; message: string; posts: GeneratedPost[]; topic?: string }
   | { type: "post_now"; message: string }
   | { type: "schedule_post"; message: string; scheduledTime: string }
-  | { type: "ask_schedule"; message: string };
+  | { type: "ask_schedule"; message: string }
+  | { type: "ask_count"; message: string; topic: string };
 
 interface UseAgentChatReturn {
   messages: ChatMessage[];
@@ -197,6 +198,10 @@ export function useAgentChat(
 
       if (data.type === "ask_schedule") {
         return { type: "ask_schedule", message: data.message };
+      }
+
+      if (data.type === "ask_count") {
+        return { type: "ask_count", message: data.message, topic: data.topic };
       }
 
       return { type: "message", message: data.message };
