@@ -298,34 +298,44 @@ const FAMOUS_VOICE_PROFILES: Record<string, {
 // ========================================
 
 function fallbackDetectPostGenerationIntent(message: string): boolean {
-  const triggers = [
-    "create",
-    "generate",
-    "write",
-    "make",
-    "draft",
-    "regenerate",
-  ];
-  const lower = message.toLowerCase();
-  return triggers.some((t) => lower.includes(t)) &&
-    (lower.includes("post") || lower.includes("posts") || lower.includes("content"));
+  const lower = message.toLowerCase().trim();
+
+  // Many users say "post about X" to mean "create a post about X".
+  // Treat that as content generation (NOT publishing permission).
+  if (/^(post|posts)\s+(about|on|regarding)\b/.test(lower)) return true;
+
+  const triggers = ["create", "generate", "write", "make", "draft", "regenerate"];
+  const hasTrigger = triggers.some((t) => lower.includes(t));
+  const mentionsPost =
+    lower.includes("post") || lower.includes("posts") || lower.includes("content");
+
+  return hasTrigger && mentionsPost;
 }
 
 function detectPostingIntent(message: string): boolean {
-  const lower = message.toLowerCase();
-  // Detect explicit posting permission
-  return /\bpost(\s+it)?\b/.test(lower) || 
-         /\bpublish(\s+it)?\b/.test(lower) ||
-         /\bschedule(\s+(it|this))?\b/.test(lower) ||
-         /\bgo\s+ahead\b/.test(lower) ||
-         /\bpost\s*now\b/.test(lower);
+  const lower = message.toLowerCase().trim();
+
+  // Avoid false positives where user is asking for content ideas ("post about X")
+  // or asking for a link ("post link?").
+  if (/^(post|posts)\s+(about|on|regarding)\b/.test(lower)) return false;
+  if (/\bpost\s+link\b/.test(lower)) return false;
+
+  // Detect explicit posting permission only (not generic "post").
+  return (
+    /\bpost\s+(it|this)\b/.test(lower) ||
+    /\bpost\s*now\b/.test(lower) ||
+    /\bpublish(\s+(it|this))?\b/.test(lower) ||
+    /\bschedule(\s+(it|this))?\b/.test(lower) ||
+    /\bgo\s+ahead\b/.test(lower)
+  );
 }
 
 function detectPostNowIntent(message: string): boolean {
-  const lower = message.toLowerCase();
-  return /\bpost(\s+it)?\s*now\b/.test(lower) || 
-         /\bpublish(\s+it)?\s*now\b/.test(lower) ||
-         /\bnow\b/.test(lower);
+  const lower = message.toLowerCase().trim();
+  return (
+    /\bpost\s*(it\s*)?now\b/.test(lower) ||
+    /\bpublish\s*(it\s*)?now\b/.test(lower)
+  );
 }
 
 function parseScheduleTime(message: string): string | null {
