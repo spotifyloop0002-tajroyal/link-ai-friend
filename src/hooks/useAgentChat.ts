@@ -109,6 +109,7 @@ export function useAgentChat(
           history: [...messages, userMessage].slice(-10),
           agentSettings,
           userContext,
+          generatedPosts, // Pass current posts so agent knows if we have any
         },
       });
 

@@ -49,6 +49,22 @@ function isPostNowRequest(lower: string): boolean {
   );
 }
 
+function isImmediateTimeRequest(lower: string): boolean {
+  return (
+    lower.includes("right now") ||
+    lower.includes("immediately") ||
+    lower === "now" ||
+    lower.includes("post it now") ||
+    lower.includes("publish now")
+  );
+}
+
+function isScheduleTimeRequest(lower: string): boolean {
+  return (
+    lower.match(/at \d|tomorrow|tonight|morning|afternoon|evening|\d+pm|\d+am/) !== null
+  );
+}
+
 function buildDraft(topic: string): string {
   return `The landscape of ${topic} is evolving rapidly.
 
@@ -78,13 +94,15 @@ serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const message: string = String(body?.message ?? "");
+    const generatedPosts: any[] = body?.generatedPosts || [];
 
     console.log("agent-chat received:", message);
+    console.log("generatedPosts count:", generatedPosts.length);
 
     const lower = message.trim().toLowerCase();
 
     // Default response shape expected by the frontend hook:
-    // { type, message, posts, topic }
+    // { type, message, posts, topic, action }
 
     if (!message.trim()) {
       return new Response(
@@ -93,6 +111,7 @@ serve(async (req) => {
           message: "Please type a message to continue.",
           posts: [],
           topic: null,
+          action: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -103,27 +122,106 @@ serve(async (req) => {
         JSON.stringify({
           type: "message",
           message:
-            "Hello! I can help you draft LinkedIn posts.\n\nTry: 'Write a post about AI trends' or 'Create a post about leadership'.",
+            "Hello! I'm your LinkedIn posting assistant.\n\nI can help you:\n1. Create professional posts - say 'write a post about [topic]'\n2. Schedule posts - say 'post it tomorrow at 2pm'\n3. Post immediately - click the 'Post Now' button or say 'post it now'\n\nWhat would you like to create?",
           posts: [],
           topic: null,
+          action: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // ============================================
+    // USER SAYS "POST IT" - CHECK FOR TIME
+    // ============================================
     if (isPostNowRequest(lower)) {
+      // Check if they ALSO said a time
+      if (isImmediateTimeRequest(lower)) {
+        // User said "post it now" or "right now" - trigger immediate post
+        if (generatedPosts.length === 0) {
+          return new Response(
+            JSON.stringify({
+              type: "message",
+              message: "I don't have any posts ready to publish. Would you like me to create one first?\n\nJust say 'write a post about [topic]'.",
+              posts: [],
+              topic: null,
+              action: null,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            type: "action",
+            message: "Posting to LinkedIn now... Click the 'Post Now' button to confirm.",
+            posts: [],
+            topic: null,
+            action: "post_now",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      if (isScheduleTimeRequest(lower)) {
+        // They specified a schedule time
+        return new Response(
+          JSON.stringify({
+            type: "message",
+            message: "I'll schedule this post for the time you specified. Click the 'Post Now' button in the Generated Posts panel to confirm.",
+            posts: [],
+            topic: null,
+            action: "schedule_post",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // NO TIME SPECIFIED - ASK FOR IT (don't auto-post!)
       return new Response(
         JSON.stringify({
           type: "message",
-          message:
-            "Please click the 'Post Now' button next to the post in the Generated Posts panel to publish it.",
+          message: "When would you like to post this?\n\nYou can:\n• Say 'right now' or 'post it now' to publish immediately\n• Say 'tomorrow at 2pm' to schedule it\n• Or just click the 'Post Now' button in the Generated Posts panel",
           posts: [],
           topic: null,
+          action: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // ============================================
+    // USER SAYS JUST "NOW" OR "RIGHT NOW"
+    // ============================================
+    if (isImmediateTimeRequest(lower) && !isPostRequest(lower)) {
+      if (generatedPosts.length === 0) {
+        return new Response(
+          JSON.stringify({
+            type: "message",
+            message: "I don't have any posts ready. Would you like me to create one first?\n\nJust say 'write a post about [topic]'.",
+            posts: [],
+            topic: null,
+            action: null,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          type: "action",
+          message: "Posting to LinkedIn now... Click the 'Post Now' button to confirm.",
+          posts: [],
+          topic: null,
+          action: "post_now",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ============================================
+    // GENERATE POST REQUEST
+    // ============================================
     if (isPostRequest(lower)) {
       const topic = extractTopic(message);
       const draft = buildDraft(topic);
@@ -142,10 +240,10 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           type: "posts_generated",
-          message:
-            `I've created a draft about ${topic}.\n\nYou can see it in the Generated Posts panel. Click 'Post Now' when you're ready to publish.`,
+          message: `I've created a post about ${topic} for you.\n\nYou can see it in the "Generated Posts" panel. When would you like to post it?\n\nOptions:\n• Say "post it now" or "right now"\n• Say "post it tomorrow at 2pm"\n• Click the "Post Now" button`,
           posts: [post],
           topic,
+          action: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -155,9 +253,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         type: "message",
-        message: `I understand you want to discuss: "${message}"\n\nIf you'd like, I can turn that into a LinkedIn post—just say “write a post about ${message}”.`,
+        message: `I understand you want to discuss: "${message}"\n\nWould you like me to create a LinkedIn post about this? Just say "write a post about ${message}"`,
         posts: [],
         topic: null,
+        action: null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -172,6 +271,7 @@ serve(async (req) => {
         message: "Sorry, I encountered an error. Please try again.",
         posts: [],
         topic: null,
+        action: null,
         error: errorMessage,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
