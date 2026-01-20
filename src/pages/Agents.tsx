@@ -153,19 +153,39 @@ const AgentsPage = () => {
     return scheduled.toISOString();
   };
 
-  const postSingleNow = async (post: { id: string; content: string; imageUrl?: string }) => {
-    if (!isExtensionConnected) {
-      toast.error("Chrome extension not connected. Please connect from Dashboard first.");
-      addActivityEntry("failed", "Extension not connected");
-      return;
+  // HARD GATE: Validates post exists with real content before allowing any posting
+  const validatePostForPublishing = (post?: { id: string; content: string; imageUrl?: string }): { valid: boolean; error?: string } => {
+    if (!post) {
+      return { valid: false, error: "No post available to publish. Generate a post first." };
     }
     if (!post.content?.trim()) {
-      toast.error("No post content to publish.");
+      return { valid: false, error: "Post has no content. Generate a post first." };
+    }
+    if (post.content.trim().length < 10) {
+      return { valid: false, error: "Post content is too short. Please generate a valid post." };
+    }
+    return { valid: true };
+  };
+
+  const postSingleNow = async (post: { id: string; content: string; imageUrl?: string }) => {
+    // HARD GATE #1: Validate post exists with content
+    const validation = validatePostForPublishing(post);
+    if (!validation.valid) {
+      toast.error(validation.error!);
+      addActivityEntry("failed", validation.error!, post?.id);
+      return;
+    }
+
+    // HARD GATE #2: Extension must be connected
+    if (!isExtensionConnected) {
+      toast.error("Chrome extension not connected. Please connect from Dashboard first.");
+      addActivityEntry("failed", "Extension not connected", post.id);
       return;
     }
 
     setIsPostingNow(true);
-    addActivityEntry("sending", "Sending post to extension...", post.id);
+    addActivityEntry("sending", "Sending to extension...", post.id);
+    
     try {
       const result = await postNow({
         id: post.id,
@@ -175,16 +195,18 @@ const AgentsPage = () => {
       });
 
       if (result?.success) {
-        addActivityEntry("queued", "Post queued for immediate publish", post.id);
-        toast.success("Posted to LinkedIn via extension!");
+        // DO NOT show success toast here - wait for extension published event
+        addActivityEntry("queued", "Sent to extension. Waiting for LinkedIn confirmation...", post.id);
+        toast.info("Sent to extension. Waiting for LinkedIn to confirm...");
       } else {
-        addActivityEntry("failed", result?.error || "Post failed", post.id);
+        addActivityEntry("failed", result?.error || "Extension rejected the post", post.id);
         toast.error(result?.error || "Failed to post via extension.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error posting now:", error);
-      addActivityEntry("failed", "Extension error", post.id);
-      toast.error("Failed to post via extension.");
+      const errorMsg = error?.message || "Extension error - could not send post";
+      addActivityEntry("failed", errorMsg, post.id);
+      toast.error(errorMsg);
     } finally {
       setIsPostingNow(false);
     }
@@ -194,14 +216,24 @@ const AgentsPage = () => {
     post: { id: string; content: string; imageUrl?: string },
     scheduledTimeIso?: string
   ) => {
+    // HARD GATE #1: Validate post exists with content
+    const validation = validatePostForPublishing(post);
+    if (!validation.valid) {
+      toast.error(validation.error!);
+      addActivityEntry("failed", validation.error!, post?.id);
+      return;
+    }
+
+    // HARD GATE #2: Extension must be connected
     if (!isExtensionConnected) {
       toast.error("Chrome extension not connected. Please connect from Dashboard first.");
-      addActivityEntry("failed", "Extension not connected");
+      addActivityEntry("failed", "Extension not connected", post.id);
       return;
     }
 
     setIsScheduling(true);
-    addActivityEntry("sending", "Sending post to extension...", post.id);
+    addActivityEntry("sending", "Sending to extension...", post.id);
+    
     try {
       const result = await sendPendingPosts([
         {
@@ -213,16 +245,18 @@ const AgentsPage = () => {
       ]);
 
       if (result.success) {
-        addActivityEntry("queued", "Post scheduled in extension", post.id);
-        toast.success("Sent to extension for scheduled posting!");
+        // DO NOT show success toast - wait for extension confirmation
+        addActivityEntry("queued", "Scheduled in extension. Waiting for confirmation...", post.id);
+        toast.info("Sent to extension for scheduling.");
       } else {
-        addActivityEntry("failed", result.error || "Schedule failed", post.id);
+        addActivityEntry("failed", result.error || "Extension rejected schedule request", post.id);
         toast.error(result.error || "Failed to send post to extension.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error scheduling post:", error);
-      addActivityEntry("failed", "Extension error", post.id);
-      toast.error("Failed to send post to extension.");
+      const errorMsg = error?.message || "Extension error - could not schedule";
+      addActivityEntry("failed", errorMsg, post.id);
+      toast.error(errorMsg);
     } finally {
       setIsScheduling(false);
     }
@@ -234,32 +268,60 @@ const AgentsPage = () => {
     const message = chatInput.trim();
     setChatInput("");
 
-    // If we're waiting for the user's schedule time, let the agent parse it so it can reply with the
-    // required confirmation format (and we can schedule via extension from the structured response).
-    if (!awaitingScheduleTime) {
-      // If the user already has generated posts visible, check for posting commands
-      if (generatedPosts.length > 0) {
-        const requestedScheduleIso = parseRequestedScheduleTimeIso(message);
-        const wantsPostNow =
-          /\bpost(\s+it)?\s+now\b/i.test(message) ||
-          /\bpublish(\s+it)?\s+now\b/i.test(message) ||
-          /\bsend(\s+it)?\s+now\b/i.test(message);
+    // HARD GATE: Check for posting commands and block if no posts exist
+    const wantsPostNow =
+      /\bpost(\s+it)?\s+now\b/i.test(message) ||
+      /\bpublish(\s+it)?\s+now\b/i.test(message) ||
+      /\bsend(\s+it)?\s+now\b/i.test(message);
 
-        if (wantsPostNow) {
-          const first = generatedPosts[0];
-          await postSingleNow(first);
+    const wantsSchedule =
+      /\bschedule(\s+it)?\b/i.test(message) ||
+      /\bpost(\s+it)?\s+at\b/i.test(message) ||
+      /\bgo\s+ahead\b/i.test(message);
+
+    // If user wants to post/schedule but NO posts exist → block immediately
+    if ((wantsPostNow || wantsSchedule) && generatedPosts.length === 0) {
+      // Don't call agent - just show error directly
+      const errorMsg = "I don't have a post ready yet. Tell me what topic you'd like to post about, and I'll create one for you.";
+      // Add as assistant message for context
+      addActivityEntry("failed", "No post to publish - blocked", undefined);
+      // Still send to agent so it responds properly in chat
+      await sendMessage(message);
+      return;
+    }
+
+    // If we're NOT waiting for schedule time and have posts, handle posting directly
+    if (!awaitingScheduleTime && generatedPosts.length > 0) {
+      const requestedScheduleIso = parseRequestedScheduleTimeIso(message);
+
+      if (wantsPostNow) {
+        const first = generatedPosts[0];
+        // Validate before posting
+        const validation = validatePostForPublishing(first);
+        if (!validation.valid) {
+          toast.error(validation.error!);
+          addActivityEntry("failed", validation.error!, first?.id);
           return;
         }
+        await postSingleNow(first);
+        return;
+      }
 
-        if (requestedScheduleIso) {
-          const first = generatedPosts[0];
-          await scheduleSingle(first, requestedScheduleIso);
+      if (requestedScheduleIso) {
+        const first = generatedPosts[0];
+        const validation = validatePostForPublishing(first);
+        if (!validation.valid) {
+          toast.error(validation.error!);
+          addActivityEntry("failed", validation.error!, first?.id);
           return;
         }
+        await scheduleSingle(first, requestedScheduleIso);
+        return;
       }
     }
 
-    const result = await sendMessage(message);
+    // Pass hasGeneratedPosts flag to agent so it can respond appropriately
+    const result = await sendMessage(message, generatedPosts.length > 0);
 
     // Agent is asking for a time — next user message should be treated as the schedule time.
     if (result?.type === "ask_schedule") {
@@ -273,20 +335,46 @@ const AgentsPage = () => {
       return;
     }
 
-    // Handle post_now response - immediately post the first available post
-    if (result?.type === "post_now" && generatedPosts.length > 0) {
+    // Handle post_now response - ONLY post if we have valid posts
+    if (result?.type === "post_now") {
       setAwaitingScheduleTime(false);
       setPendingTopic(null);
+      
+      if (generatedPosts.length === 0) {
+        addActivityEntry("failed", "Agent returned post_now but no posts exist - blocked", undefined);
+        return;
+      }
+      
       const first = generatedPosts[0];
+      const validation = validatePostForPublishing(first);
+      if (!validation.valid) {
+        addActivityEntry("failed", validation.error!, first?.id);
+        toast.error(validation.error!);
+        return;
+      }
+      
       await postSingleNow(first);
       return;
     }
 
-    // Handle schedule_post response - schedule the first available post
-    if (result?.type === "schedule_post" && generatedPosts.length > 0) {
+    // Handle schedule_post response - ONLY schedule if we have valid posts
+    if (result?.type === "schedule_post") {
       setAwaitingScheduleTime(false);
       setPendingTopic(null);
+      
+      if (generatedPosts.length === 0) {
+        addActivityEntry("failed", "Agent returned schedule_post but no posts exist - blocked", undefined);
+        return;
+      }
+      
       const first = generatedPosts[0];
+      const validation = validatePostForPublishing(first);
+      if (!validation.valid) {
+        addActivityEntry("failed", validation.error!, first?.id);
+        toast.error(validation.error!);
+        return;
+      }
+      
       await scheduleSingle(first, result.scheduledTime);
       return;
     }
@@ -327,11 +415,22 @@ const AgentsPage = () => {
   };
 
   const handleScheduleAll = async () => {
+    // HARD GATE #1: Must have posts
     if (generatedPosts.length === 0) {
-      toast.error("No posts to schedule");
+      toast.error("No posts to schedule. Generate posts first.");
+      addActivityEntry("failed", "No posts to schedule");
       return;
     }
 
+    // HARD GATE #2: All posts must have valid content
+    const invalidPosts = generatedPosts.filter(p => !p.content?.trim() || p.content.trim().length < 10);
+    if (invalidPosts.length > 0) {
+      toast.error(`${invalidPosts.length} post(s) have no content. Please regenerate them.`);
+      addActivityEntry("failed", `${invalidPosts.length} posts have invalid content`);
+      return;
+    }
+
+    // HARD GATE #3: Extension must be connected
     if (!isExtensionConnected) {
       toast.error("Chrome extension not connected. Please connect from Dashboard first.");
       addActivityEntry("failed", "Extension not connected");
@@ -342,30 +441,41 @@ const AgentsPage = () => {
     addActivityEntry("sending", `Sending ${generatedPosts.length} posts to extension...`);
 
     try {
-      // Format posts for extension
-      const postsForExtension = generatedPosts.map((post) => ({
-        id: post.id,
-        content: post.content,
-        photo_url: post.imageUrl,
-        scheduled_time: post.scheduledDateTime || new Date().toISOString(),
-      }));
+      // Format posts for extension - only include posts with valid content
+      const postsForExtension = generatedPosts
+        .filter(p => p.content?.trim() && p.content.trim().length >= 10)
+        .map((post) => ({
+          id: post.id,
+          content: post.content,
+          photo_url: post.imageUrl,
+          scheduled_time: post.scheduledDateTime || new Date().toISOString(),
+        }));
 
-      // Send to extension (now returns result instead of throwing)
+      if (postsForExtension.length === 0) {
+        addActivityEntry("failed", "No valid posts to send");
+        toast.error("No valid posts to schedule.");
+        setIsScheduling(false);
+        return;
+      }
+
+      // Send to extension
       const result = await sendPendingPosts(postsForExtension);
 
       if (result.success) {
-        addActivityEntry("queued", `${generatedPosts.length} posts scheduled in extension`);
-        toast.success(`Sent ${generatedPosts.length} posts to extension for LinkedIn posting!`);
+        // DO NOT show success toast - wait for extension confirmation
+        addActivityEntry("queued", `${postsForExtension.length} posts sent. Waiting for confirmation...`);
+        toast.info(`Sent ${postsForExtension.length} posts to extension.`);
         setShowCreateModal(false);
         resetModal();
       } else {
-        addActivityEntry("failed", result.error || "Bulk schedule failed");
+        addActivityEntry("failed", result.error || "Extension rejected bulk schedule");
         toast.error(result.error || "Failed to send posts to extension.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error scheduling posts:", error);
-      addActivityEntry("failed", "Extension error during bulk schedule");
-      toast.error("Failed to send posts to extension. Please try again.");
+      const errorMsg = error?.message || "Extension error during bulk schedule";
+      addActivityEntry("failed", errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsScheduling(false);
     }

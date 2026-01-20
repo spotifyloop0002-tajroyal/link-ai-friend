@@ -639,11 +639,12 @@ serve(async (req) => {
   }
 
   try {
-    const { message, history, agentSettings, userContext } = await req.json() as {
+    const { message, history, agentSettings, userContext, hasGeneratedPosts } = await req.json() as {
       message: string;
       history: ChatMessage[];
       agentSettings: AgentSettings;
       userContext: UserContext;
+      hasGeneratedPosts?: boolean; // Frontend tells us if posts exist
     };
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -654,16 +655,26 @@ serve(async (req) => {
     const parsed = await parseAgentRequest({ message, history }, LOVABLE_API_KEY);
 
     // ========================================
-    // LINKEDBOT POSTING LOGIC
+    // LINKEDBOT POSTING LOGIC - WITH HARD GATES
     // ========================================
     
     // Check if user is giving explicit posting permission
     if (detectPostingIntent(message)) {
+      // HARD GATE: If no posts exist, DO NOT return post_now or schedule_post
+      if (!hasGeneratedPosts) {
+        return new Response(JSON.stringify({
+          type: "message",
+          message: "I don't have a post ready yet. Tell me what topic you'd like to post about, and I'll create one for you.\n\nFor example: \"Create 3 posts about AI trends\"",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Check for "post now" intent
       if (detectPostNowIntent(message)) {
         return new Response(JSON.stringify({
           type: "post_now",
-          message: "✅ Posting now.\n\nI'll take care of the rest.",
+          message: "Sending to extension...\n\nI'll confirm once LinkedIn publishes it.",
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -687,7 +698,7 @@ serve(async (req) => {
         
         return new Response(JSON.stringify({
           type: "schedule_post",
-          message: `✅ Your post is scheduled for ${formattedTime} on ${formattedDate}.\n\nI'll take care of the rest.`,
+          message: `Scheduling for ${formattedTime} on ${formattedDate}...\n\nI'll confirm once the extension queues it.`,
           scheduledTime: scheduledTime,
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -705,6 +716,16 @@ serve(async (req) => {
     
     // Handle schedule_post action from parseAgentRequest (for backwards compatibility)
     if (parsed.action === "schedule_post" && parsed.scheduledTime) {
+      // HARD GATE: Block if no posts exist
+      if (!hasGeneratedPosts) {
+        return new Response(JSON.stringify({
+          type: "message",
+          message: "I don't have a post ready to schedule. What topic should I create a post about first?",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const scheduledDate = new Date(parsed.scheduledTime);
       const formattedTime = scheduledDate.toLocaleTimeString("en-US", { 
         hour: "numeric", 
@@ -719,7 +740,7 @@ serve(async (req) => {
       
       return new Response(JSON.stringify({
         type: "schedule_post",
-        message: `✅ Your post is scheduled for ${formattedTime} on ${formattedDate}.\n\nI'll take care of the rest.`,
+        message: `Scheduling for ${formattedTime} on ${formattedDate}...\n\nI'll confirm once the extension queues it.`,
         scheduledTime: parsed.scheduledTime,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

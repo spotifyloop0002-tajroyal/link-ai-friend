@@ -46,7 +46,7 @@ interface UseAgentChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
   generatedPosts: GeneratedPost[];
-  sendMessage: (message: string) => Promise<AgentChatResponse | null>;
+  sendMessage: (message: string, hasGeneratedPosts?: boolean) => Promise<AgentChatResponse | null>;
   resetChat: () => void;
   updatePost: (postId: string, updates: Partial<GeneratedPost>) => void;
   deletePost: (postId: string) => void;
@@ -154,7 +154,7 @@ export function useAgentChat(
   const [isLoading, setIsLoading] = useState(false);
   const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>([]);
 
-  const sendMessage = useCallback(async (message: string): Promise<AgentChatResponse | null> => {
+  const sendMessage = useCallback(async (message: string, hasGeneratedPosts: boolean = false): Promise<AgentChatResponse | null> => {
     if (!message.trim() || isLoading) return null;
 
     const userMessage: ChatMessage = { role: "user", content: message };
@@ -170,6 +170,7 @@ export function useAgentChat(
           history: nextHistory,
           agentSettings,
           userContext,
+          hasGeneratedPosts, // Pass to backend so it knows if posts exist
         },
       });
 
