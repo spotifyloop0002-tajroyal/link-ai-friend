@@ -459,6 +459,20 @@ async function parseAgentRequest(
   { message, history }: { message: string; history: ChatMessage[] },
   apiKey: string,
 ): Promise<ParsedAgentRequest> {
+  // If the assistant just asked "how many posts?" and the user replies with a number,
+  // treat it as the missing count and reuse the last known topic.
+  const numericOnly = message.trim().match(/^([1-9]|10)$/);
+  if (numericOnly) {
+    const n = Number.parseInt(numericOnly[1], 10);
+    const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
+    const topicMatch = lastAssistant.match(/create\s+(?:\d+\s+)?posts?\s+about\s+["']?([^"'\n]+)["']?/i);
+    const topic = topicMatch?.[1]?.trim() || null;
+
+    if (topic) {
+      return { action: "generate_posts", topic, count: n };
+    }
+  }
+
   // Check for scheduling commands with time
   const scheduledTime = parseScheduleTime(message);
   if (scheduledTime && detectPostingIntent(message)) {

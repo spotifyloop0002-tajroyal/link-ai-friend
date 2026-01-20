@@ -121,7 +121,31 @@ export const useLinkedBotExtension = () => {
     }
 
     try {
-      window.LinkedBotExtension.sendPendingPosts(posts);
+      const api: any = window.LinkedBotExtension;
+
+      // Support multiple extension versions by probing available method names.
+      const candidates = [
+        'sendPendingPosts',
+        'sendPosts',
+        'sendScheduledPosts',
+        'schedulePosts',
+        'queuePosts',
+        'enqueuePosts',
+        'addPosts',
+      ];
+
+      const fnName = candidates.find((name) => typeof api?.[name] === 'function');
+      if (!fnName) {
+        const available = api ? Object.keys(api).filter((k) => typeof api[k] === 'function') : [];
+        console.error('Extension scheduling API not found. Available methods:', available);
+        return {
+          success: false,
+          error:
+            'Your extension does not support scheduling from the app (missing scheduling API). Please update the extension and try again.',
+        };
+      }
+
+      api[fnName](posts);
       return { success: true };
     } catch (error) {
       console.error('Error sending posts to extension:', error);
