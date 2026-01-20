@@ -186,30 +186,25 @@ const AgentsPage = () => {
     setIsPostingNow(true);
     addActivityEntry("sending", "Sending to extension...", post.id);
     
-    try {
-      const result = await postNow({
-        id: post.id,
-        content: post.content,
-        photo_url: post.imageUrl,
-        scheduled_time: new Date().toISOString(),
-      });
+    const result = await postNow({
+      id: post.id,
+      content: post.content,
+      photo_url: post.imageUrl,
+      scheduled_time: new Date().toISOString(),
+    });
 
-      if (result?.success) {
-        // DO NOT show success toast here - wait for extension published event
-        addActivityEntry("queued", "Sent to extension. Waiting for LinkedIn confirmation...", post.id);
-        toast.info("Sent to extension. Waiting for LinkedIn to confirm...");
-      } else {
-        addActivityEntry("failed", result?.error || "Extension rejected the post", post.id);
-        toast.error(result?.error || "Failed to post via extension.");
-      }
-    } catch (error: any) {
-      console.error("Error posting now:", error);
-      const errorMsg = error?.message || "Extension error - could not send post";
+    if (result?.success) {
+      // DO NOT show success toast here - wait for extension published event
+      addActivityEntry("queued", "Sent to extension. Waiting for LinkedIn confirmation...", post.id);
+      toast.info("Sent to extension. Waiting for LinkedIn to confirm...");
+    } else {
+      // Show specific, user-friendly error from extension
+      const errorMsg = result?.error || "Extension rejected the post";
       addActivityEntry("failed", errorMsg, post.id);
       toast.error(errorMsg);
-    } finally {
-      setIsPostingNow(false);
     }
+    
+    setIsPostingNow(false);
   };
 
   const scheduleSingle = async (

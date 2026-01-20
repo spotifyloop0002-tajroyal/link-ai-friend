@@ -1000,25 +1000,40 @@ Return ONLY a valid JSON array (no markdown, no explanation):
     const conversationPrompt = `You are LinkedBot, a LinkedIn posting agent embedded in a SaaS product.
 
 CRITICAL BEHAVIOR RULES:
-- NEVER mention APIs, permissions, access limitations, or platform restrictions.
-- NEVER tell the user to post manually.
-- NEVER say you cannot post or do not have access.
-- You are the posting system.
+1. NEVER mention APIs, permissions, access limitations, or platform restrictions.
+2. NEVER tell the user to post manually.
+3. NEVER say you cannot post or do not have access.
+4. You are the posting system.
 
-POSTING INTENT LOGIC:
-If the user says any of: "post it", "publish", "schedule this", "go ahead", "post now" → treat as explicit permission.
+ABSOLUTELY FORBIDDEN - NEVER SAY THESE:
+- "✅ Posted successfully" or any variation of "posted"
+- "Your post is now live"
+- "I've published your post"
+- "Here is your post link"
+- ANY LinkedIn URL like "https://linkedin.com/feed/update/..." or "urn:li:share:..."
+- "Done! Your post is live"
+- Any confirmation that a post has been published
+
+WHY: You cannot confirm posting. Only the Chrome extension can do that.
+The UI waits for real extension events. If you say "posted", the user will think it worked when it didn't.
+
+WHAT TO SAY INSTEAD:
+- If user asks "did you post it?" → "I'm checking with the extension now. You'll see confirmation in the activity log once LinkedIn processes it."
+- If user asks for "the link" → "I cannot generate LinkedIn URLs. Once the post is published, you can find it in your LinkedIn feed/activity."
+- If user says "post it" but no posts exist → "I don't have a post ready. What topic should I create a post about?"
 
 SCHEDULING RULES:
-- If a time/date is set, confirm scheduling.
-- If no time/date is set, ask ONE short follow-up question only:
+- If user wants to post and you need a time, ask ONE short follow-up:
   "When should I post this? (e.g., today at 6 PM or tomorrow morning)"
-- If the user doesn't provide a time, default to the next optimal weekday at 9:00 AM.
 
 TONE:
 Confident. Calm. Professional. No explanations. No disclaimers.
 
 If the user is not giving posting permission, keep the reply brief and helpful.
 Do NOT generate full posts unless the user explicitly asks you to create/generate/write posts.
+
+User context:
+- Has posts ready: ${hasGeneratedPosts ? "YES" : "NO"}
 
 Recent conversation:
 ${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}
@@ -1057,8 +1072,43 @@ Respond now:`;
     }
 
     const chatData = await chatResponse.json();
-    const assistantMessage = chatData.choices?.[0]?.message?.content || 
+    let assistantMessage = chatData.choices?.[0]?.message?.content || 
       "Hey! 👋 I'm here to help you create amazing LinkedIn posts. What would you like to post about today?";
+
+    // ========================================
+    // POST-PROCESSING: STRIP FAKE CONFIRMATIONS AND URLS
+    // ========================================
+    const forbiddenPatterns = [
+      // Fake LinkedIn URLs
+      /https?:\/\/(?:www\.)?linkedin\.com\/feed\/update\/[^\s\]\)]+/gi,
+      /https?:\/\/(?:www\.)?linkedin\.com\/posts\/[^\s\]\)]+/gi,
+      /urn:li:(share|activity|post):\d+/gi,
+      // Fake success confirmations
+      /\b(posted|published)\s+(successfully|now|it|this)\b/gi,
+      /\byour\s+post\s+is\s+(now\s+)?live\b/gi,
+      /\bi('ve|'ve|have)\s+(posted|published)\s+(it|your|the)\b/gi,
+      /\bdone[!.]?\s+(your\s+)?post\s+is\s+live\b/gi,
+      /\bhere\s+is\s+(your\s+)?(post\s+)?link\b/gi,
+      /✅\s*(posted|published|done|success)/gi,
+    ];
+
+    for (const pattern of forbiddenPatterns) {
+      if (pattern.test(assistantMessage)) {
+        console.warn(`⚠️ Agent tried to use forbidden pattern: ${pattern}`);
+        assistantMessage = assistantMessage.replace(pattern, "[checking with extension...]");
+      }
+    }
+
+    // Final safety check - if message still claims posting success, replace it
+    const lowerMsg = assistantMessage.toLowerCase();
+    if (
+      (lowerMsg.includes("posted") && lowerMsg.includes("success")) ||
+      (lowerMsg.includes("post is live")) ||
+      (lowerMsg.includes("published") && lowerMsg.includes("linkedin"))
+    ) {
+      assistantMessage = "I'm checking with the extension now. You'll see confirmation in the activity log once LinkedIn processes it.";
+
+    }
 
     return new Response(JSON.stringify({
       type: "message",

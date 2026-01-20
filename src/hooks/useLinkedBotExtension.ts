@@ -153,18 +153,79 @@ export const useLinkedBotExtension = () => {
     }
   }, []);
 
-  // Post immediately
-  const postNow = useCallback(async (post: Post) => {
-    if (typeof window.LinkedBotExtension === 'undefined' || !status.isConnected) {
-      throw new Error('Extension not connected');
+  // Post immediately with enhanced error handling
+  const postNow = useCallback(async (post: Post): Promise<{ success: boolean; error?: string; linkedinPostId?: string }> => {
+    // GATE 1: Extension must be available
+    if (typeof window.LinkedBotExtension === 'undefined') {
+      return { 
+        success: false, 
+        error: 'Extension not installed. Please install the LinkedBot Chrome extension first.' 
+      };
+    }
+
+    // GATE 2: Must be connected
+    if (!status.isConnected) {
+      return { 
+        success: false, 
+        error: 'Extension not connected. Please connect from the Dashboard first.' 
+      };
+    }
+
+    // GATE 3: Post must have content
+    if (!post.content || post.content.trim() === '') {
+      return { 
+        success: false, 
+        error: 'Post content is empty. Generate a post first.' 
+      };
     }
 
     try {
+      // Re-check connection status before posting
+      const statusCheck = await window.LinkedBotExtension.checkStatus();
+      if (!statusCheck.connected) {
+        return { 
+          success: false, 
+          error: 'Extension disconnected. Please reconnect from the Dashboard.' 
+        };
+      }
+
       const result = await window.LinkedBotExtension.postNow(post);
+      
+      // Handle extension-specific errors with user-friendly messages
+      if (!result.success && result.error) {
+        let userFriendlyError = result.error;
+        
+        if (result.error.includes('No tab with id')) {
+          userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
+        } else if (result.error.includes('Extension context invalidated')) {
+          userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
+        } else if (result.error.includes('Could not establish connection')) {
+          userFriendlyError = 'Extension disconnected. Please check if the extension is enabled in Chrome.';
+        } else if (result.error.includes('Receiving end does not exist')) {
+          userFriendlyError = 'Cannot reach LinkedIn tab. Please refresh LinkedIn and try again.';
+        } else if (result.error.includes('Cannot access')) {
+          userFriendlyError = 'Cannot access LinkedIn. Please make sure you are logged in to LinkedIn.';
+        }
+        
+        return { success: false, error: userFriendlyError };
+      }
+      
       return result;
     } catch (error) {
       console.error('Error posting:', error);
-      throw error;
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      let userFriendlyError = errorMessage;
+      
+      if (errorMessage.includes('No tab with id')) {
+        userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
+      } else if (errorMessage.includes('Extension context invalidated')) {
+        userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
+      } else if (errorMessage.includes('Could not establish connection')) {
+        userFriendlyError = 'Extension disconnected. Please check if the extension is enabled in Chrome.';
+      }
+      
+      return { success: false, error: userFriendlyError };
     }
   }, [status.isConnected]);
 
