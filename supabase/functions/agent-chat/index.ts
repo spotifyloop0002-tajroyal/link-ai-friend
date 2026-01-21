@@ -1,9 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// ============================================
+// FETCH USER CONTEXT FOR AI
+// ============================================
+async function fetchUserContext(authHeader: string | null): Promise<any | null> {
+  if (!authHeader) return null;
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/get-agent-context`, {
+      method: "GET",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        console.log("✅ User context loaded");
+        return data;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch user context:", error);
+  }
+  
+  return null;
+}
 
 // ============================================
 // TAVILY RESEARCH FUNCTION
@@ -46,11 +79,17 @@ async function researchTopic(topic: string): Promise<string | null> {
 // ============================================
 // REAL AI FUNCTION (via Lovable AI Gateway)
 // ============================================
-async function callAI(prompt: string, conversationHistory: any[] = []): Promise<string> {
+async function callAI(prompt: string, conversationHistory: any[] = [], userContext?: any): Promise<string> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  // Build dynamic system prompt with user context
+  let userContextSection = "";
+  if (userContext?.aiInstructions) {
+    userContextSection = `\n\n${userContext.aiInstructions}`;
   }
 
   const systemPrompt = `You are a professional LinkedIn content creator and posting assistant.
@@ -60,6 +99,7 @@ PERSONALITY:
 - Professional but approachable
 - Ask clarifying questions when needed
 - Provide specific, actionable advice
+${userContextSection}
 
 BEHAVIOR RULES:
 
@@ -322,6 +362,7 @@ serve(async (req) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
     const body = await req.json().catch(() => ({}));
     const message: string = String(body?.message ?? "").trim();
     const conversationHistory: any[] = body?.history || [];
@@ -330,6 +371,9 @@ serve(async (req) => {
     console.log("📨 Agent received:", message);
     console.log("📝 History length:", conversationHistory.length);
     console.log("🗂️ Generated posts:", generatedPosts.length);
+
+    // Fetch user context for personalized AI
+    const userContext = await fetchUserContext(authHeader);
 
     if (!message) {
       return new Response(
@@ -429,7 +473,7 @@ What would you like to create today?`;
         }
 
         // Call real AI for intelligent response
-        response = await callAI(enhancedPrompt, conversationHistory);
+        response = await callAI(enhancedPrompt, conversationHistory, userContext);
 
         // Extract post if AI created one
         const postContent = extractPostContent(response);
@@ -453,7 +497,7 @@ What would you like to create today?`;
       case "conversation":
       default: {
         // For general conversation, use AI
-        response = await callAI(message, conversationHistory);
+        response = await callAI(message, conversationHistory, userContext);
         
         // Check if AI created a post in the response
         const postContent = extractPostContent(response);

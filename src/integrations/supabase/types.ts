@@ -143,6 +143,120 @@ export type Database = {
         }
         Relationships: []
       }
+      posts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          linkedin_post_id: string | null
+          linkedin_post_url: string | null
+          photo_url: string | null
+          posted_at: string | null
+          scheduled_time: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          linkedin_post_id?: string | null
+          linkedin_post_url?: string | null
+          photo_url?: string | null
+          posted_at?: string | null
+          scheduled_time?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          linkedin_post_id?: string | null
+          linkedin_post_url?: string | null
+          photo_url?: string | null
+          posted_at?: string | null
+          scheduled_time?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          background: string | null
+          company_description: string | null
+          company_name: string | null
+          created_at: string
+          default_topics: string[] | null
+          email: string | null
+          id: string
+          industry: string | null
+          linkedin_profile_url: string | null
+          linkedin_username: string | null
+          location: string | null
+          name: string | null
+          onboarding_completed: boolean | null
+          post_frequency: string | null
+          posting_goals: string[] | null
+          preferred_tone: string | null
+          role: string | null
+          target_audience: string | null
+          updated_at: string
+          user_id: string
+          user_type: string | null
+        }
+        Insert: {
+          background?: string | null
+          company_description?: string | null
+          company_name?: string | null
+          created_at?: string
+          default_topics?: string[] | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          linkedin_profile_url?: string | null
+          linkedin_username?: string | null
+          location?: string | null
+          name?: string | null
+          onboarding_completed?: boolean | null
+          post_frequency?: string | null
+          posting_goals?: string[] | null
+          preferred_tone?: string | null
+          role?: string | null
+          target_audience?: string | null
+          updated_at?: string
+          user_id: string
+          user_type?: string | null
+        }
+        Update: {
+          background?: string | null
+          company_description?: string | null
+          company_name?: string | null
+          created_at?: string
+          default_topics?: string[] | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          linkedin_profile_url?: string | null
+          linkedin_username?: string | null
+          location?: string | null
+          name?: string | null
+          onboarding_completed?: boolean | null
+          post_frequency?: string | null
+          posting_goals?: string[] | null
+          preferred_tone?: string | null
+          role?: string | null
+          target_audience?: string | null
+          updated_at?: string
+          user_id?: string
+          user_type?: string | null
+        }
+        Relationships: []
+      }
       user_writing_style: {
         Row: {
           avg_post_length: number | null
