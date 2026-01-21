@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      agents: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          posts_created: number
+          posts_published: number
+          posts_scheduled: number
+          settings: Json | null
+          success_rate: number
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          posts_created?: number
+          posts_published?: number
+          posts_scheduled?: number
+          settings?: Json | null
+          success_rate?: number
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          posts_created?: number
+          posts_published?: number
+          posts_scheduled?: number
+          settings?: Json | null
+          success_rate?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       linkedin_analytics: {
         Row: {
           connections_count: number | null
@@ -145,6 +190,8 @@ export type Database = {
       }
       posts: {
         Row: {
+          agent_id: string | null
+          agent_name: string | null
           content: string
           created_at: string
           id: string
@@ -161,6 +208,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string | null
+          agent_name?: string | null
           content: string
           created_at?: string
           id?: string
@@ -177,6 +226,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string | null
+          agent_name?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -192,7 +243,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "posts_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_profiles: {
         Row: {

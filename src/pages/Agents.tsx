@@ -42,6 +42,8 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useAgents } from "@/hooks/useAgents";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
@@ -60,27 +62,6 @@ const agentTypes = [
   { id: "news", icon: Newspaper, label: "News/Updates", description: "Company announcements" },
 ];
 
-const existingAgents = [
-  {
-    id: 1,
-    name: "Professional Tech Posts",
-    type: "professional",
-    postsCreated: 24,
-    postsScheduled: 8,
-    successRate: 96,
-    isActive: true,
-  },
-  {
-    id: 2,
-    name: "Startup Stories",
-    type: "storytelling",
-    postsCreated: 12,
-    postsScheduled: 4,
-    successRate: 92,
-    isActive: true,
-  },
-];
-
 const AgentsPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createStep, setCreateStep] = useState(1);
@@ -92,9 +73,14 @@ const AgentsPage = () => {
   const [voiceReference, setVoiceReference] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [generatePhoto, setGeneratePhoto] = useState(false);
-  const [agents, setAgents] = useState(existingAgents);
+  const [agentName, setAgentName] = useState("");
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch real agents and user profile
+  const { agents, isLoading: agentsLoading, createAgent, toggleAgentStatus, deleteAgent, incrementAgentStats } = useAgents();
+  const { profile } = useUserProfile();
 
   // Agent settings
   const currentAgentSettings = {
@@ -105,10 +91,13 @@ const AgentsPage = () => {
     voiceReference: voiceReference || undefined,
   };
 
+  // Real user context from profile
   const currentUserContext = {
-    name: "User",
-    industry: "Technology",
-    // Don't include company/background - keep neutral for all users
+    name: profile?.name || "User",
+    industry: profile?.industry || "Technology",
+    company: profile?.company_name,
+    role: profile?.role,
+    background: profile?.background,
   };
 
   // Agent chat hook
@@ -379,12 +368,12 @@ const AgentsPage = () => {
     resetChat();
   };
 
-  const toggleAgentStatus = (agentId: number) => {
-    setAgents((prev) =>
-      prev.map((agent) =>
-        agent.id === agentId ? { ...agent, isActive: !agent.isActive } : agent
-      )
-    );
+  const handleToggleAgentStatus = async (agentId: string) => {
+    await toggleAgentStatus(agentId);
+  };
+
+  const handleDeleteAgent = async (agentId: string) => {
+    await deleteAgent(agentId);
   };
 
   const getTypeIcon = (type: string) => {
@@ -461,9 +450,9 @@ const AgentsPage = () => {
         >
           {[
             { label: "Total Agents", value: agents.length },
-            { label: "Active Agents", value: agents.filter((a) => a.isActive).length },
-            { label: "Total Posts", value: agents.reduce((sum, a) => sum + a.postsCreated, 0) },
-            { label: "Avg Success Rate", value: `${Math.round(agents.reduce((sum, a) => sum + a.successRate, 0) / agents.length)}%` },
+            { label: "Active Agents", value: agents.filter((a) => a.is_active).length },
+            { label: "Total Posts", value: agents.reduce((sum, a) => sum + (a.posts_created || 0), 0) },
+            { label: "Avg Success Rate", value: agents.length > 0 ? `${Math.round(agents.reduce((sum, a) => sum + (a.success_rate || 0), 0) / agents.length)}%` : "0%" },
           ].map((stat, index) => (
             <div
               key={index}
@@ -495,11 +484,11 @@ const AgentsPage = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={agent.isActive}
-                      onCheckedChange={() => toggleAgentStatus(agent.id)}
+                      checked={agent.is_active}
+                      onCheckedChange={() => handleToggleAgentStatus(agent.id)}
                     />
-                    <span className={`text-xs font-medium ${agent.isActive ? "text-success" : "text-muted-foreground"}`}>
-                      {agent.isActive ? "Active" : "Paused"}
+                    <span className={`text-xs font-medium ${agent.is_active ? "text-success" : "text-muted-foreground"}`}>
+                      {agent.is_active ? "Active" : "Paused"}
                     </span>
                   </div>
                 </div>
@@ -511,15 +500,15 @@ const AgentsPage = () => {
 
                 <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-border">
                   <div>
-                    <p className="text-2xl font-bold">{agent.postsCreated}</p>
+                    <p className="text-2xl font-bold">{agent.posts_created}</p>
                     <p className="text-xs text-muted-foreground">Posts Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{agent.postsScheduled}</p>
+                    <p className="text-2xl font-bold">{agent.posts_scheduled}</p>
                     <p className="text-xs text-muted-foreground">Scheduled</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{agent.successRate}%</p>
+                    <p className="text-2xl font-bold">{agent.success_rate}%</p>
                     <p className="text-xs text-muted-foreground">Success</p>
                   </div>
                 </div>
@@ -529,7 +518,12 @@ const AgentsPage = () => {
                     <Edit className="w-4 h-4" />
                     Edit
                   </Button>
-                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteAgent(agent.id)}
+                  >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>

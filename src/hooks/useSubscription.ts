@@ -30,6 +30,7 @@ export const PLAN_LIMITS = {
 // Active coupons
 const ACTIVE_COUPONS: Record<string, { plan: string; duration: number; description: string }> = {
   "FREE2026": { plan: "pro", duration: 30, description: "Free Pro Plan for 30 days" },
+  "BUSS2026": { plan: "business", duration: 30, description: "Free Business Plan for 30 days" },
 };
 
 export interface SubscriptionStatus {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -19,67 +19,80 @@ import {
   Edit,
   Trash2,
   Eye,
+  Loader2,
 } from "lucide-react";
 import { format, addMonths, subMonths, isSameDay } from "date-fns";
+import { usePosts } from "@/hooks/usePosts";
+import { useAgents } from "@/hooks/useAgents";
+import { useNavigate } from "react-router-dom";
 
-const scheduledPosts = [
-  {
-    id: 1,
-    date: new Date(2026, 0, 20),
-    time: "9:00 AM",
-    preview: "Excited to share our latest AI developments...",
-    agent: "Professional Tech",
-    color: "bg-primary",
-  },
-  {
-    id: 2,
-    date: new Date(2026, 0, 21),
-    time: "12:00 PM",
-    preview: "3 lessons I learned from building my startup...",
-    agent: "Storytelling",
-    color: "bg-secondary",
-  },
-  {
-    id: 3,
-    date: new Date(2026, 0, 22),
-    time: "5:00 PM",
-    preview: "The future of remote work is here...",
-    agent: "Thought Leadership",
-    color: "bg-success",
-  },
-  {
-    id: 4,
-    date: new Date(2026, 0, 23),
-    time: "10:00 AM",
-    preview: "When my first startup failed...",
-    agent: "Comedy",
-    color: "bg-warning",
-  },
-  {
-    id: 5,
-    date: new Date(2026, 0, 25),
-    time: "9:00 AM",
-    preview: "5 trends shaping tech in 2026...",
-    agent: "Professional Tech",
-    color: "bg-primary",
-  },
-];
+// Color mapping for agent types
+const agentColors: Record<string, string> = {
+  comedy: "bg-warning",
+  professional: "bg-primary",
+  storytelling: "bg-secondary",
+  "thought-leadership": "bg-success",
+  motivational: "bg-pink-500",
+  "data-analytics": "bg-blue-500",
+  creative: "bg-purple-500",
+  news: "bg-orange-500",
+};
 
 const CalendarPage = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 0, 19));
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(2026, 0, 19));
+  const navigate = useNavigate();
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
   const [filterAgent, setFilterAgent] = useState("all");
 
+  // Fetch real data
+  const { posts, isLoading: postsLoading, deletePost, fetchScheduledPosts } = usePosts();
+  const { agents, isLoading: agentsLoading } = useAgents();
+
+  useEffect(() => {
+    fetchScheduledPosts();
+  }, [fetchScheduledPosts]);
+
   const getPostsForDate = (date: Date) => {
-    return scheduledPosts.filter((post) => isSameDay(post.date, date));
+    return posts.filter((post) => {
+      if (!post.scheduled_time) return false;
+      return isSameDay(new Date(post.scheduled_time), date);
+    });
   };
 
   const selectedDatePosts = selectedDate ? getPostsForDate(selectedDate) : [];
 
   const filteredPosts = filterAgent === "all"
-    ? scheduledPosts
-    : scheduledPosts.filter((post) => post.agent === filterAgent);
+    ? posts.filter(p => p.status === "scheduled")
+    : posts.filter((post) => post.agent_name === filterAgent && post.status === "scheduled");
+
+  const getAgentColor = (agentName: string | null) => {
+    if (!agentName) return "bg-muted";
+    const agent = agents.find(a => a.name === agentName);
+    if (agent) {
+      return agentColors[agent.type] || "bg-primary";
+    }
+    return "bg-primary";
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    await deletePost(postId);
+  };
+
+  const isLoading = postsLoading || agentsLoading;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Get unique agent names for filter
+  const uniqueAgentNames = [...new Set(posts.map(p => p.agent_name).filter(Boolean))];
 
   return (
     <DashboardLayout>
@@ -96,9 +109,9 @@ const CalendarPage = () => {
               Schedule and manage your LinkedIn posts
             </p>
           </div>
-          <Button variant="gradient" className="gap-2">
+          <Button variant="gradient" className="gap-2" onClick={() => navigate("/dashboard/agents")}>
             <Plus className="w-4 h-4" />
-            Add Post
+            Create Post
           </Button>
         </motion.div>
 
@@ -162,7 +175,7 @@ const CalendarPage = () => {
                 onMonthChange={setCurrentMonth}
                 className="w-full"
                 modifiers={{
-                  hasPost: scheduledPosts.map((p) => p.date),
+                  hasPost: posts.filter(p => p.scheduled_time).map((p) => new Date(p.scheduled_time!)),
                 }}
                 modifiersStyles={{
                   hasPost: {
@@ -188,7 +201,7 @@ const CalendarPage = () => {
                             {postsOnDay.slice(0, 3).map((post, i) => (
                               <div
                                 key={i}
-                                className={`w-1.5 h-1.5 rounded-full ${post.color}`}
+                                className={`w-1.5 h-1.5 rounded-full ${getAgentColor(post.agent_name)}`}
                               />
                             ))}
                           </div>
@@ -227,9 +240,9 @@ const CalendarPage = () => {
                     <Clock className="w-8 h-8 text-muted-foreground" />
                   </div>
                   <p className="text-muted-foreground mb-4">No posts scheduled</p>
-                  <Button variant="outline" className="gap-2">
+                  <Button variant="outline" className="gap-2" onClick={() => navigate("/dashboard/agents")}>
                     <Plus className="w-4 h-4" />
-                    Add Post
+                    Create Post
                   </Button>
                 </div>
               ) : (
@@ -240,16 +253,16 @@ const CalendarPage = () => {
                       className="p-4 rounded-xl bg-muted/50 border border-border"
                     >
                       <div className="flex items-center gap-2 mb-2">
-                        <span className={`w-2 h-2 rounded-full ${post.color}`} />
+                        <span className={`w-2 h-2 rounded-full ${getAgentColor(post.agent_name)}`} />
                         <span className="text-xs font-medium text-muted-foreground">
-                          {post.time}
+                          {post.scheduled_time ? format(new Date(post.scheduled_time), "h:mm a") : "No time"}
                         </span>
                       </div>
-                      <p className="text-sm line-clamp-2 mb-3">{post.preview}</p>
+                      <p className="text-sm line-clamp-2 mb-3">{post.content}</p>
                       <div className="flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 text-xs text-primary">
                           <Bot className="w-3 h-3" />
-                          {post.agent}
+                          {post.agent_name || "Manual"}
                         </span>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -262,6 +275,7 @@ const CalendarPage = () => {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeletePost(post.id)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -290,50 +304,60 @@ const CalendarPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Agents</SelectItem>
-                <SelectItem value="Professional Tech">Professional Tech</SelectItem>
-                <SelectItem value="Storytelling">Storytelling</SelectItem>
-                <SelectItem value="Thought Leadership">Thought Leadership</SelectItem>
-                <SelectItem value="Comedy">Comedy</SelectItem>
+                {uniqueAgentNames.map((name) => (
+                  <SelectItem key={name} value={name!}>{name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="divide-y divide-border">
-            {filteredPosts.map((post) => (
-              <div
-                key={post.id}
-                className="p-4 hover:bg-muted/50 transition-colors flex items-center gap-4"
-              >
-                <div className={`w-3 h-3 rounded-full ${post.color} flex-shrink-0`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{post.preview}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span>{format(post.date, "MMM d, yyyy")}</span>
-                    <span>{post.time}</span>
-                    <span className="inline-flex items-center gap-1 text-primary">
-                      <Bot className="w-3 h-3" />
-                      {post.agent}
-                    </span>
+          {filteredPosts.length === 0 ? (
+            <div className="p-12 text-center">
+              <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground mb-4">No scheduled posts yet</p>
+              <Button variant="outline" onClick={() => navigate("/dashboard/agents")}>
+                Create Your First Post
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {filteredPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="p-4 hover:bg-muted/50 transition-colors flex items-center gap-4"
+                >
+                  <div className={`w-3 h-3 rounded-full ${getAgentColor(post.agent_name)} flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{post.content}</p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <span>{post.scheduled_time ? format(new Date(post.scheduled_time), "MMM d, yyyy") : "No date"}</span>
+                      <span>{post.scheduled_time ? format(new Date(post.scheduled_time), "h:mm a") : ""}</span>
+                      <span className="inline-flex items-center gap-1 text-primary">
+                        <Bot className="w-3 h-3" />
+                        {post.agent_name || "Manual"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeletePost(post.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
     </DashboardLayout>
