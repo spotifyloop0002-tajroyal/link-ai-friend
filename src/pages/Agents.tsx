@@ -38,13 +38,16 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  ImagePlus,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
+import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
+import { useImageUpload } from "@/hooks/useImageUpload";
 
 const agentTypes = [
   { id: "comedy", icon: Smile, label: "Comedy/Humorous", description: "Funny, light-hearted posts" },
@@ -133,9 +136,22 @@ const AgentsPage = () => {
   const [isPostingNow, setIsPostingNow] = useState(false);
   const [awaitingScheduleTime, setAwaitingScheduleTime] = useState(false);
   const [pendingTopic, setPendingTopic] = useState<string | null>(null); // for ask_count flow
+  const [showImageUpload, setShowImageUpload] = useState(false);
 
   // Extension activity log
   const { entries: activityEntries, addEntry: addActivityEntry, clearLog: clearActivityLog } = useExtensionActivityLog();
+
+  // Image upload hook
+  const {
+    images: uploadedImages,
+    isUploading: isUploadingImages,
+    addImages,
+    removeImage,
+    clearImages,
+    getImageUrls,
+    remainingSlots,
+    maxImages,
+  } = useImageUpload();
 
   const parseRequestedScheduleTimeIso = (text: string): string | null => {
     const match = text.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
@@ -296,9 +312,15 @@ const AgentsPage = () => {
 
   // SIMPLIFIED: Agent only generates posts. User clicks button to post.
   const handleSendMessage = async () => {
-    if (!chatInput.trim() || isLoading) return;
+    const hasImages = uploadedImages.length > 0;
+    const hasText = chatInput.trim().length > 0;
+    
+    // Must have either text or images
+    if (!hasText && !hasImages) return;
+    if (isLoading || isUploadingImages) return;
 
     const message = chatInput.trim();
+    const imageUrls = getImageUrls();
     setChatInput("");
 
     // Check for posting commands - tell user to click the button
@@ -326,8 +348,19 @@ const AgentsPage = () => {
       return;
     }
 
+    // If images are uploaded, include them in the message
+    const finalMessage = hasImages && imageUrls.length > 0
+      ? `${message || "Create posts for these images"}\n\n[UPLOADED_IMAGES: ${imageUrls.join(", ")}]`
+      : message;
+
+    // Clear uploaded images after sending
+    if (hasImages) {
+      clearImages();
+      setShowImageUpload(false);
+    }
+
     // FIX 1: Pass generatePhoto flag to auto-generate images
-    await sendMessage(message, { generateImage: generatePhoto });
+    await sendMessage(finalMessage, { generateImage: generatePhoto, uploadedImages: imageUrls });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -794,29 +827,62 @@ const AgentsPage = () => {
                   </ScrollArea>
 
                   {/* Chat input */}
-                  <div className="flex-shrink-0 border-t border-border pt-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <input
-                        type="checkbox"
-                        id="generatePhoto"
-                        checked={generatePhoto}
-                        onChange={(e) => setGeneratePhoto(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="generatePhoto" className="text-sm flex items-center gap-1">
-                        <Sparkles className="w-4 h-4 text-secondary" />
-                        Generate photo with AI
-                      </label>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="icon" disabled={isLoading}>
-                        <Paperclip className="w-5 h-5" />
+                  <div className="flex-shrink-0 border-t border-border pt-4 space-y-3">
+                    {/* Image Upload Panel (toggleable) */}
+                    <AnimatePresence>
+                      {showImageUpload && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                        >
+                          <ImageUploadPanel
+                            images={uploadedImages}
+                            isUploading={isUploadingImages}
+                            remainingSlots={remainingSlots}
+                            maxImages={maxImages}
+                            onAddImages={addImages}
+                            onRemoveImage={removeImage}
+                            disabled={isLoading}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Options Row */}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="generatePhoto"
+                          checked={generatePhoto}
+                          onChange={(e) => setGeneratePhoto(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="generatePhoto" className="text-sm flex items-center gap-1">
+                          <Sparkles className="w-4 h-4 text-secondary" />
+                          AI image
+                        </label>
+                      </div>
+                      
+                      <Button
+                        variant={showImageUpload ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setShowImageUpload(!showImageUpload)}
+                        className="gap-1.5 h-7 text-xs"
+                      >
+                        <ImagePlus className="w-3.5 h-3.5" />
+                        Upload ({uploadedImages.length}/{maxImages})
                       </Button>
+                    </div>
+
+                    {/* Input Row */}
+                    <div className="flex gap-2">
                       <Input
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="Say hi or ask me to create posts..."
+                        placeholder={uploadedImages.length > 0 ? "Describe posts for your images..." : "Say hi or ask me to create posts..."}
                         className="flex-1"
                         disabled={isLoading}
                       />
@@ -824,7 +890,7 @@ const AgentsPage = () => {
                         variant="gradient" 
                         size="icon" 
                         onClick={handleSendMessage}
-                        disabled={isLoading || !chatInput.trim()}
+                        disabled={isLoading || isUploadingImages || (!chatInput.trim() && uploadedImages.length === 0)}
                       >
                         {isLoading ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
