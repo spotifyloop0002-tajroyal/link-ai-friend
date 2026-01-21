@@ -435,8 +435,15 @@ const LinkedInConnectionPage = () => {
           await fetchProfile();
           toast({
             title: "Profile URL saved",
-            description: "Your LinkedIn profile URL has been saved. You can now scan your posts.",
+            description: "Starting post scan automatically...",
           });
+          // Auto-trigger post scanning after profile URL is saved
+          setTimeout(() => {
+            const ext = window.LinkedBotExtension as any;
+            if (ext?.scanPosts) {
+              handleScanPosts();
+            }
+          }, 500);
         }}
       />
     </DashboardLayout>
