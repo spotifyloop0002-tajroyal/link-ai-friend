@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Agents from "./pages/Agents";
+import AgentChat from "./pages/AgentChat";
 import CalendarPage from "./pages/CalendarPage";
 import Analytics from "./pages/Analytics";
 import LinkedInConnection from "./pages/LinkedInConnection";
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/agents" element={<Agents />} />
+          <Route path="/dashboard/agents/chat" element={<AgentChat />} />
           <Route path="/dashboard/calendar" element={<CalendarPage />} />
           <Route path="/dashboard/analytics" element={<Analytics />} />
           <Route path="/dashboard/linkedin" element={<LinkedInConnection />} />
