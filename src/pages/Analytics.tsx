@@ -5,6 +5,7 @@ import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useLinkedInAnalytics } from "@/hooks/useLinkedInAnalytics";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useToast } from "@/hooks/use-toast";
+import { MissingProfileBanner } from "@/components/linkedin/MissingProfileBanner";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Eye, Heart, MessageCircle, Share2, TrendingUp, Trophy, Bot, ExternalLink, RefreshCw, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Eye, Heart, MessageCircle, Share2, TrendingUp, Trophy, Bot, ExternalLink, RefreshCw, Wifi, WifiOff, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -89,6 +90,15 @@ const AnalyticsPage = () => {
     }
 
     try {
+      // First, ensure the profile URL is synced to the extension
+      if (userProfile?.linkedin_profile_url && ext?.saveProfileUrl) {
+        try {
+          await ext.saveProfileUrl(userProfile.linkedin_profile_url);
+        } catch (urlErr) {
+          console.warn("Could not sync profile URL to extension:", urlErr);
+        }
+      }
+
       toast({
         title: "Syncing analytics",
         description: "Scraping your LinkedIn analytics... This may take a moment.",
@@ -96,14 +106,22 @@ const AnalyticsPage = () => {
 
       const result = await ext.scrapeAnalytics();
 
-      if (result.success && result.data) {
-        await syncAnalytics({
-          profile: result.data.profile,
-          posts: result.data.posts || [],
-        });
-      } else {
+      // Handle undefined or null response
+      if (!result) {
+        throw new Error("Extension returned no data. Please ensure LinkedIn is open in another tab.");
+      }
+
+      // Handle error response
+      if (!result.success) {
         throw new Error(result.error || "Failed to scrape analytics");
       }
+
+      // Handle missing data with fallbacks
+      const analyticsData = result.data || {};
+      await syncAnalytics({
+        profile: analyticsData.profile || null,
+        posts: analyticsData.posts || [],
+      });
     } catch (err) {
       console.error("Sync error:", err);
       toast({
@@ -153,6 +171,11 @@ const AnalyticsPage = () => {
   return (
     <DashboardLayout>
       <div className="space-y-8">
+        {/* Missing Profile URL Banner */}
+        {!profileLoading && !hasProfileUrl && isConnected && (
+          <MissingProfileBanner />
+        )}
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

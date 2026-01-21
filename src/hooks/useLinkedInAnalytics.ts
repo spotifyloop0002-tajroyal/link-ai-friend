@@ -108,10 +108,14 @@ export const useLinkedInAnalytics = (): UseLinkedInAnalyticsReturn => {
         throw new Error('Not authenticated');
       }
 
+      // Validate input data with fallbacks
+      const safeProfile = extensionData?.profile || null;
+      const safePosts = Array.isArray(extensionData?.posts) ? extensionData.posts : [];
+
       const response = await supabase.functions.invoke('save-analytics', {
         body: {
-          profile: extensionData.profile,
-          posts: extensionData.posts,
+          profile: safeProfile,
+          posts: safePosts,
           scrapedAt: new Date().toISOString(),
         },
         headers: {
@@ -121,22 +125,29 @@ export const useLinkedInAnalytics = (): UseLinkedInAnalyticsReturn => {
 
       if (response.error) throw response.error;
 
+      // Handle undefined response.data
+      if (!response.data) {
+        throw new Error('No response from server');
+      }
+
       if (response.data.success) {
         await fetchAnalytics();
         toast({
           title: "Analytics synced",
-          description: `Synced ${extensionData.posts?.length || 0} posts successfully`,
+          description: `Synced ${safePosts.length} posts successfully`,
         });
         return true;
       }
 
-      return false;
+      // Handle unsuccessful response with error message
+      throw new Error(response.data.error || 'Sync was not successful');
     } catch (err) {
       console.error('Failed to sync analytics:', err);
-      setError(err instanceof Error ? err.message : 'Failed to sync analytics');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sync analytics';
+      setError(errorMessage);
       toast({
         title: "Sync failed",
-        description: err instanceof Error ? err.message : 'Failed to sync analytics',
+        description: errorMessage,
         variant: "destructive",
       });
       return false;
