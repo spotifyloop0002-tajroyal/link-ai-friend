@@ -460,11 +460,58 @@ Requirements: No text overlay, visually represent the concept, minimalist`;
 // EXTRACT POST CONTENT FROM AI RESPONSE
 // ============================================
 function extractPostContent(aiResponse: string): string | null {
+  // Try the standard marker pattern first
   const markerPattern = /---\s*\n([\s\S]+?)\n\s*---/;
   const match = aiResponse.match(markerPattern);
   
   if (match && match[1]) {
     return cleanPostContent(match[1]);
+  }
+  
+  // Try alternate marker patterns (sometimes AI uses different formats)
+  const altPatterns = [
+    /---\s*([\s\S]+?)\s*---/, // Less strict whitespace
+    /```\s*\n?([\s\S]+?)\n?\s*```/, // Code block format
+    /\*\*Post:\*\*\s*\n([\s\S]+?)(?:\n\n|$)/, // Bold header format
+  ];
+  
+  for (const pattern of altPatterns) {
+    const altMatch = aiResponse.match(pattern);
+    if (altMatch && altMatch[1] && altMatch[1].trim().length > 20) {
+      return cleanPostContent(altMatch[1]);
+    }
+  }
+  
+  // Fallback: If no markers found, check if the whole response looks like a post
+  // (contains newlines, reasonable length, no obvious conversational phrases at start)
+  const cleanResponse = aiResponse.trim();
+  const isLikelyPost = 
+    cleanResponse.length > 50 && 
+    cleanResponse.length < 3000 &&
+    !cleanResponse.toLowerCase().startsWith("i ") &&
+    !cleanResponse.toLowerCase().startsWith("here") &&
+    !cleanResponse.toLowerCase().startsWith("sure") &&
+    !cleanResponse.toLowerCase().startsWith("let me") &&
+    !cleanResponse.toLowerCase().startsWith("of course") &&
+    (cleanResponse.includes("\n") || cleanResponse.includes("!") || cleanResponse.includes("?"));
+  
+  if (isLikelyPost) {
+    // Try to extract just the post content by removing any preamble
+    const lines = cleanResponse.split("\n");
+    let postStart = 0;
+    
+    // Skip introductory lines
+    for (let i = 0; i < Math.min(3, lines.length); i++) {
+      const line = lines[i].toLowerCase().trim();
+      if (line.startsWith("here") || line.startsWith("sure") || line.startsWith("i've") || line.includes("post:")) {
+        postStart = i + 1;
+      }
+    }
+    
+    const postContent = lines.slice(postStart).join("\n").trim();
+    if (postContent.length > 30) {
+      return cleanPostContent(postContent);
+    }
   }
   
   return null;
