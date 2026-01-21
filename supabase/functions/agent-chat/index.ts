@@ -14,7 +14,6 @@ async function fetchUserContext(authHeader: string | null): Promise<any | null> 
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
     const response = await fetch(`${supabaseUrl}/functions/v1/get-agent-context`, {
       method: "GET",
@@ -39,9 +38,9 @@ async function fetchUserContext(authHeader: string | null): Promise<any | null> 
 }
 
 // ============================================
-// TAVILY RESEARCH FUNCTION
+// TAVILY RESEARCH FUNCTION - ENHANCED
 // ============================================
-async function researchTopic(topic: string): Promise<string | null> {
+async function researchTopic(topic: string, userContext?: any): Promise<{ insights: string; suggestedTopics: string[] } | null> {
   const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
   
   if (!TAVILY_API_KEY) {
@@ -51,14 +50,21 @@ async function researchTopic(topic: string): Promise<string | null> {
 
   try {
     console.log("🔍 Researching topic with Tavily:", topic);
+    
+    // Build context-aware query
+    let query = `Latest trends and insights about ${topic} for LinkedIn professional post`;
+    if (userContext?.agentContext?.profile?.industry) {
+      query += ` in the ${userContext.agentContext.profile.industry} industry`;
+    }
+    
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
-        query: `Latest trends and insights about ${topic} for LinkedIn professional post`,
+        query,
         search_depth: "basic",
-        max_results: 3,
+        max_results: 5,
       }),
     });
 
@@ -66,8 +72,14 @@ async function researchTopic(topic: string): Promise<string | null> {
     
     if (data.results && data.results.length > 0) {
       const insights = data.results.map((r: any) => `- ${r.content?.substring(0, 200)}`).join("\n");
-      console.log("✅ Research complete");
-      return insights;
+      
+      // Extract suggested topics from results
+      const suggestedTopics = data.results
+        .slice(0, 3)
+        .map((r: any) => r.title?.substring(0, 60) || topic);
+      
+      console.log("✅ Research complete with", data.results.length, "results");
+      return { insights, suggestedTopics };
     }
   } catch (error) {
     console.error("Tavily research error:", error);
@@ -101,19 +113,40 @@ PERSONALITY:
 - Provide specific, actionable advice
 ${userContextSection}
 
-BEHAVIOR RULES:
+CRITICAL BEHAVIOR RULES:
 
-1. WHEN USER GIVES VAGUE TOPIC (e.g., "write about cars", "post about technology"):
+1. **CONFIRMATION FLOW** (MOST IMPORTANT):
+   When user asks to create multiple posts (e.g., "create posts for next 5 days", "generate a week of content"):
+   - DO NOT create posts immediately
+   - First respond with a PLAN asking for confirmation:
+     "Here's what I can do for you - please confirm:
+     
+     📋 **My Plan:**
+     • Research latest trends in [topic/industry]
+     • Create [X] unique posts with varied content
+     • Suggest optimal posting times
+     • Generate AI images for each post
+     
+     📅 **Suggested Schedule:**
+     • Day 1: [Topic idea 1]
+     • Day 2: [Topic idea 2]
+     • etc.
+     
+     **Would you like me to proceed with this plan?** Or would you prefer different topics/timing?"
+   
+   Only create posts AFTER user confirms with "yes", "proceed", "go ahead", etc.
+
+2. WHEN USER GIVES VAGUE TOPIC (e.g., "write about cars", "post about technology"):
    - Ask for more details
    - Provide 3-4 example angles they could take
-   - Be helpful and guide them
-   - Example: "I'd love to write about cars! To make this impactful, are you interested in:
-     • Electric vehicles and sustainability?
-     • Autonomous driving technology?
-     • Industry market trends?
+   - Use research to suggest trending topics
+   - Example: "I'd love to write about cars! Based on current trends, here are some angles:
+     • Electric vehicles and sustainability
+     • Autonomous driving technology
+     • Industry market trends
      • Or something else specific?"
 
-2. WHEN USER GIVES SPECIFIC TOPIC (e.g., "write about tech in cars", "post about AI in healthcare"):
+3. WHEN USER GIVES SPECIFIC TOPIC (e.g., "write about tech in cars", "post about AI in healthcare"):
    - Acknowledge you understand
    - Tell them you're creating the post
    - Use research data if provided
@@ -124,23 +157,14 @@ BEHAVIOR RULES:
    - Ask if they want changes
    - Ask when they want to post it
 
-3. WHEN USER ASKS TO SEE/SHOW POST:
-   - Show the complete post content in the chat
-   - Format it nicely between --- markers
-   - Ask if they want any changes
+4. SCHEDULING RULES (LinkedIn-safe):
+   - NEVER schedule same time every day
+   - Vary posting times between 9am-6pm
+   - Max 2 posts per day
+   - Suggest different content lengths/formats
+   - Avoid repetitive post structures
 
-4. WHEN DISCUSSING POSTING TIME:
-   - Understand natural language: "tomorrow at 2pm", "next Monday", "in 3 hours", "3:42pm today"
-   - Confirm the schedule clearly
-   - Tell them it will appear in "Scheduled Posts"
-
-5. CONVERSATION STYLE:
-   - Natural and flowing like ChatGPT
-   - Remember context from conversation
-   - Be helpful and proactive
-   - Use emojis occasionally but professionally
-
-POST FORMAT:
+5. POST FORMAT:
 When creating a post, use this format:
 ---
 [Your LinkedIn post content here with paragraphs, bullet points, and hashtags]
@@ -201,16 +225,11 @@ Then ask: "What do you think? Would you like any changes? When would you like to
 // ============================================
 function cleanPostContent(content: string): string {
   return content
-    // Remove more than 2 consecutive newlines
     .replace(/\n{3,}/g, '\n\n')
-    // Remove leading/trailing whitespace
     .trim()
-    // Remove excessive spaces at the start of lines
     .replace(/^[ \t]{3,}/gm, '')
-    // Ensure consistent spacing around bullet points
     .replace(/\n•/g, '\n\n•')
     .replace(/•\s+/g, '• ')
-    // Clean up multiple spaces
     .replace(/  +/g, ' ');
 }
 
@@ -218,18 +237,15 @@ function cleanPostContent(content: string): string {
 // GENERATE IMAGE PROMPT FROM POST CONTENT
 // ============================================
 function generateImagePromptFromPost(postContent: string): string {
-  // Extract the first meaningful line
   const lines = postContent.split('\n').filter(line => line.trim().length > 0);
   const firstLine = lines[0]?.trim() || 'Professional business content';
   
-  // Clean topic: remove emojis and special characters
   const cleanTopic = firstLine
-    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[^\w\s.,!?-]/g, '')
     .trim()
     .substring(0, 150);
   
-  // Extract key themes
   const themes: string[] = [];
   const lowerContent = postContent.toLowerCase();
   
@@ -241,6 +257,12 @@ function generateImagePromptFromPost(postContent: string): string {
   }
   if (lowerContent.includes('tech') || lowerContent.includes('software')) {
     themes.push('technology, innovation');
+  }
+  if (lowerContent.includes('leadership') || lowerContent.includes('management')) {
+    themes.push('leadership, business');
+  }
+  if (lowerContent.includes('startup') || lowerContent.includes('entrepreneur')) {
+    themes.push('startup, entrepreneurship');
   }
   
   const themeString = themes.length > 0 ? themes.join(', ') : 'professional business';
@@ -258,12 +280,10 @@ Requirements: No text overlay, visually represent the concept, minimalist`;
 // EXTRACT POST CONTENT FROM AI RESPONSE
 // ============================================
 function extractPostContent(aiResponse: string): string | null {
-  // Look for content between --- markers
   const markerPattern = /---\s*\n([\s\S]+?)\n\s*---/;
   const match = aiResponse.match(markerPattern);
   
   if (match && match[1]) {
-    // Clean the extracted content
     return cleanPostContent(match[1]);
   }
   
@@ -271,10 +291,34 @@ function extractPostContent(aiResponse: string): string | null {
 }
 
 // ============================================
-// DETECT USER INTENT
+// DETECT USER INTENT - ENHANCED
 // ============================================
 function detectIntent(message: string): { type: string; data?: any } {
   const lower = message.toLowerCase().trim();
+
+  // Multi-post request (needs confirmation first)
+  const multiPostPatterns = [
+    /create\s+posts?\s+for\s+(?:the\s+)?(?:next\s+)?\d+\s*days?/i,
+    /generate\s+\d+\s*posts?/i,
+    /(?:a\s+)?week(?:'s)?\s+(?:worth\s+)?(?:of\s+)?content/i,
+    /schedule\s+posts?\s+for\s+(?:the\s+)?week/i,
+    /batch\s+create/i,
+    /multiple\s+posts?/i,
+  ];
+  
+  if (multiPostPatterns.some(p => p.test(message))) {
+    return { type: "multi_post_request", data: { originalMessage: message } };
+  }
+
+  // User confirms plan
+  const confirmPatterns = [
+    /^(yes|yeah|yep|sure|ok|okay|proceed|go ahead|do it|confirm|approved?|let'?s go|sounds good|perfect)$/i,
+    /^(yes|yeah|yep|sure|ok|okay),?\s*(please|proceed|go ahead)?$/i,
+  ];
+  
+  if (confirmPatterns.some(p => p.test(lower))) {
+    return { type: "confirm_plan" };
+  }
 
   // Show post
   if (lower.includes("show") && (lower.includes("post") || lower.includes("content"))) {
@@ -289,8 +333,8 @@ function detectIntent(message: string): { type: string; data?: any } {
 
   // Post with specific time
   const timePatterns = [
-    /\d{1,2}:\d{2}\s*(am|pm)?/i, // 3:42, 3:42pm, 15:30
-    /\d{1,2}\s*(am|pm)/i, // 3pm, 3 pm
+    /\d{1,2}:\d{2}\s*(am|pm)?/i,
+    /\d{1,2}\s*(am|pm)/i,
     /today/i,
     /tomorrow/i,
     /tonight/i,
@@ -339,18 +383,33 @@ function detectIntent(message: string): { type: string; data?: any } {
 // ============================================
 function isSpecificTopic(message: string): boolean {
   const words = message.split(/\s+/).filter(w => w.length > 2);
-  // More than 5 meaningful words = specific
-  // Or contains specific keywords
   const specificIndicators = [
-    /and\s+\w+/i, // "tech and AI"
-    /in\s+\w+/i, // "AI in healthcare"
-    /for\s+\w+/i, // "tips for developers"
-    /about\s+\w+\s+\w+/i, // "about machine learning"
+    /and\s+\w+/i,
+    /in\s+\w+/i,
+    /for\s+\w+/i,
+    /about\s+\w+\s+\w+/i,
     /how\s+to/i,
     /\d+\s+(tips|ways|steps|reasons)/i,
   ];
   
   return words.length > 5 || specificIndicators.some(p => p.test(message));
+}
+
+// ============================================
+// GENERATE MULTI-POST SCHEDULE
+// ============================================
+function generateScheduleSuggestion(numDays: number, topics: string[]): string {
+  const times = ["9:00 AM", "10:30 AM", "12:00 PM", "2:00 PM", "4:30 PM", "6:00 PM"];
+  const schedule: string[] = [];
+  
+  for (let i = 0; i < numDays; i++) {
+    const day = i === 0 ? "Today" : i === 1 ? "Tomorrow" : `Day ${i + 1}`;
+    const time = times[Math.floor(Math.random() * times.length)];
+    const topic = topics[i % topics.length] || `Topic ${i + 1}`;
+    schedule.push(`• ${day} at ${time} IST: ${topic}`);
+  }
+  
+  return schedule.join("\n");
 }
 
 // ============================================
@@ -367,6 +426,7 @@ serve(async (req) => {
     const message: string = String(body?.message ?? "").trim();
     const conversationHistory: any[] = body?.history || [];
     const generatedPosts: any[] = body?.generatedPosts || [];
+    const pendingPlan: any = body?.pendingPlan || null;
 
     console.log("📨 Agent received:", message);
     console.log("📝 History length:", conversationHistory.length);
@@ -393,6 +453,7 @@ serve(async (req) => {
     let response = "";
     let posts: any[] = [];
     let action: string | null = null;
+    let planToConfirm: any = null;
 
     // ============================================
     // HANDLE DIFFERENT INTENTS
@@ -406,7 +467,7 @@ I can help you:
 1. **Create posts** - Say "write a post about [topic]"
 2. **Research topics** - I'll find the latest insights for your posts
 3. **Schedule posts** - Say "post it tomorrow at 2pm"
-4. **Post immediately** - Say "post it now" or click the Post Now button
+4. **Batch create** - Say "create posts for next 5 days"
 
 What would you like to create today?`;
         break;
@@ -414,6 +475,66 @@ What would you like to create today?`;
 
       case "cancel": {
         response = "No problem! Let me know when you'd like to create a LinkedIn post. Just say 'write a post about [topic]' when you're ready. 👍";
+        break;
+      }
+
+      case "multi_post_request": {
+        // Extract number of days/posts from message
+        const numMatch = message.match(/(\d+)\s*(?:days?|posts?)/i);
+        const numDays = numMatch ? parseInt(numMatch[1]) : 5;
+        
+        // Research to get topic suggestions
+        const research = await researchTopic("trending professional topics", userContext);
+        const suggestedTopics = research?.suggestedTopics || [
+          "Industry insights",
+          "Professional growth tips",
+          "Success story",
+          "How-to guide",
+          "Thought leadership",
+        ];
+        
+        const schedule = generateScheduleSuggestion(numDays, suggestedTopics);
+        
+        response = `Great idea! Here's what I can do for you - **please confirm**:
+
+📋 **My Plan:**
+• Research latest trends in your industry
+• Create ${numDays} unique posts with varied content
+• Suggest optimal posting times (different each day)
+• Generate AI images for each post (if enabled)
+
+📅 **Suggested Schedule:**
+${schedule}
+
+⚡ **LinkedIn-Safe Approach:**
+• Different posting times each day
+• Varied content formats
+• Max 2 posts per day
+
+**Would you like me to proceed with this plan?**
+Or would you prefer different topics/timing?`;
+        
+        planToConfirm = {
+          type: "multi_post",
+          numDays,
+          topics: suggestedTopics,
+          schedule,
+        };
+        break;
+      }
+
+      case "confirm_plan": {
+        // User confirmed - generate the posts
+        if (pendingPlan && pendingPlan.type === "multi_post") {
+          response = `Perfect! 🚀 Creating ${pendingPlan.numDays} posts for you...`;
+          
+          // Generate posts (would be done via AI in production)
+          // For now, signal to create posts
+          action = "execute_plan";
+        } else {
+          // No plan to confirm - use AI to respond
+          response = await callAI(message, conversationHistory, userContext);
+        }
         break;
       }
 
@@ -441,7 +562,6 @@ What would you like to create today?`;
         if (!generatedPosts || generatedPosts.length === 0) {
           response = "I don't have any posts to schedule. Would you like me to create one first?\n\nJust say 'write a post about [topic]' 📝";
         } else {
-          // Extract time from message
           const timeText = intent.data?.timeText || message;
           response = `Perfect! I'll schedule your post for ${timeText}. 📅\n\nClick the **Post Now** button to confirm and send it to the extension.`;
           action = "schedule_post";
@@ -466,9 +586,9 @@ What would you like to create today?`;
 
         // If specific topic, add research
         if (isSpecific) {
-          const research = await researchTopic(message);
+          const research = await researchTopic(message, userContext);
           if (research) {
-            enhancedPrompt = `${message}\n\n[LATEST RESEARCH INSIGHTS - Use these to make the post current and data-driven:]\n${research}`;
+            enhancedPrompt = `${message}\n\n[LATEST RESEARCH INSIGHTS - Use these to make the post current and data-driven:]\n${research.insights}`;
           }
         }
 
@@ -478,7 +598,6 @@ What would you like to create today?`;
         // Extract post if AI created one
         const postContent = extractPostContent(response);
         if (postContent) {
-          // Generate image prompt from actual post content
           const imagePrompt = generateImagePromptFromPost(postContent);
           
           posts = [{
@@ -502,7 +621,6 @@ What would you like to create today?`;
         // Check if AI created a post in the response
         const postContent = extractPostContent(response);
         if (postContent) {
-          // Generate image prompt from actual post content
           const imagePrompt = generateImagePromptFromPost(postContent);
           
           posts = [{
@@ -526,6 +644,7 @@ What would you like to create today?`;
         posts,
         topic: null,
         action,
+        planToConfirm,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

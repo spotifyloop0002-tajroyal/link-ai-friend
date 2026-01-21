@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Check, Zap, Crown, Rocket } from "lucide-react";
@@ -17,6 +18,11 @@ const plans = [
       "Photo upload",
       "Community support",
     ],
+    limits: {
+      agents: 1,
+      postsPerMonth: 5,
+      postsPerDay: 1,
+    },
     cta: "Get Started Free",
     popular: false,
   },
@@ -35,6 +41,11 @@ const plans = [
       "Priority support",
       "Custom voice training",
     ],
+    limits: {
+      agents: 3,
+      postsPerMonth: 30,
+      postsPerDay: 2,
+    },
     cta: "Start Pro Trial",
     popular: true,
   },
@@ -46,7 +57,7 @@ const plans = [
     description: "For teams and agencies managing multiple brands",
     features: [
       "Unlimited Agents",
-      "Unlimited posts",
+      "60 posts per month",
       "Full analytics suite",
       "AI photo generation",
       "Smart scheduling",
@@ -55,16 +66,27 @@ const plans = [
       "A/B testing (coming soon)",
       "Team collaboration",
     ],
+    limits: {
+      agents: -1, // unlimited
+      postsPerMonth: 60,
+      postsPerDay: 3,
+    },
     cta: "Start Business Trial",
     popular: false,
   },
 ];
 
-const Pricing = () => {
+export const PLAN_LIMITS = {
+  free: { agents: 1, postsPerMonth: 5, postsPerDay: 1 },
+  pro: { agents: 3, postsPerMonth: 30, postsPerDay: 2 },
+  business: { agents: -1, postsPerMonth: 60, postsPerDay: 3 },
+};
+
+const Pricing = forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-24 relative overflow-hidden" id="pricing">
+    <section ref={ref} className="py-24 relative overflow-hidden" id="pricing">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-muted/30 via-background to-background" />
       
@@ -152,6 +174,8 @@ const Pricing = () => {
       </div>
     </section>
   );
-};
+});
+
+Pricing.displayName = "Pricing";
 
 export default Pricing;
