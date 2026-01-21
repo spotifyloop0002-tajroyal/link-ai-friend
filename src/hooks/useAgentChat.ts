@@ -172,7 +172,7 @@ export function useAgentChat(
     }
   }, [generatedPosts]);
 
-  const sendMessage = useCallback(async (message: string, options?: { generateImage?: boolean }): Promise<void> => {
+  const sendMessage = useCallback(async (message: string, options?: { generateImage?: boolean; uploadedImages?: string[] }): Promise<void> => {
     if (!message.trim() || isLoading) return;
 
     console.log("=== useAgentChat.sendMessage ===");
@@ -199,6 +199,7 @@ export function useAgentChat(
           userContext,
           generatedPosts,
           generateImage: options?.generateImage ?? false,
+          uploadedImages: options?.uploadedImages ?? [],
         },
       });
 

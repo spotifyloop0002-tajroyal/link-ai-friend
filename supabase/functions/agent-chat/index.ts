@@ -293,8 +293,22 @@ function extractPostContent(aiResponse: string): string | null {
 // ============================================
 // DETECT USER INTENT - ENHANCED
 // ============================================
-function detectIntent(message: string): { type: string; data?: any } {
+function detectIntent(message: string, uploadedImages?: string[]): { type: string; data?: any } {
   const lower = message.toLowerCase().trim();
+
+  // Check for uploaded images first
+  if (uploadedImages && uploadedImages.length > 0) {
+    return { type: "create_posts_from_images", data: { imageUrls: uploadedImages } };
+  }
+
+  // Check for [UPLOADED_IMAGES:] marker in message
+  const imageMatch = message.match(/\[UPLOADED_IMAGES:\s*([^\]]+)\]/);
+  if (imageMatch) {
+    const imageUrls = imageMatch[1].split(",").map(url => url.trim()).filter(url => url.length > 0);
+    if (imageUrls.length > 0) {
+      return { type: "create_posts_from_images", data: { imageUrls } };
+    }
+  }
 
   // Multi-post request (needs confirmation first)
   const multiPostPatterns = [
@@ -427,15 +441,17 @@ serve(async (req) => {
     const conversationHistory: any[] = body?.history || [];
     const generatedPosts: any[] = body?.generatedPosts || [];
     const pendingPlan: any = body?.pendingPlan || null;
+    const uploadedImages: string[] = body?.uploadedImages || [];
 
     console.log("📨 Agent received:", message);
     console.log("📝 History length:", conversationHistory.length);
     console.log("🗂️ Generated posts:", generatedPosts.length);
+    console.log("🖼️ Uploaded images:", uploadedImages.length);
 
     // Fetch user context for personalized AI
     const userContext = await fetchUserContext(authHeader);
 
-    if (!message) {
+    if (!message && uploadedImages.length === 0) {
       return new Response(
         JSON.stringify({
           type: "message",
@@ -447,7 +463,7 @@ serve(async (req) => {
       );
     }
 
-    const intent = detectIntent(message);
+    const intent = detectIntent(message, uploadedImages);
     console.log("🎯 Detected intent:", intent.type);
 
     let response = "";
@@ -475,6 +491,69 @@ What would you like to create today?`;
 
       case "cancel": {
         response = "No problem! Let me know when you'd like to create a LinkedIn post. Just say 'write a post about [topic]' when you're ready. 👍";
+        break;
+      }
+
+      case "create_posts_from_images": {
+        const imageUrls: string[] = intent.data?.imageUrls || [];
+        console.log("🖼️ Creating posts for", imageUrls.length, "images");
+        
+        // Clean the message to extract any user instructions
+        const cleanMessage = message.replace(/\[UPLOADED_IMAGES:[^\]]+\]/g, "").trim();
+        const userInstructions = cleanMessage || "Create an engaging LinkedIn post for this image";
+        
+        // Generate a post for each image
+        for (let i = 0; i < imageUrls.length; i++) {
+          const imageUrl = imageUrls[i];
+          const postIndex = i + 1;
+          
+          const imagePostPrompt = `You are creating a LinkedIn post for an uploaded image (image ${postIndex} of ${imageUrls.length}).
+
+User instructions: ${userInstructions}
+
+The image has been uploaded and will be attached to this post. Create an engaging, professional LinkedIn post that:
+1. Captures attention with a strong opening
+2. Relates to the user's instructions or describes what the image might represent
+3. Includes a call to action or question to drive engagement
+4. Uses appropriate hashtags (2-3 max)
+
+IMPORTANT: Output the post content between --- markers like this:
+---
+Your post content here
+---
+
+Make each post unique if there are multiple images.`;
+
+          try {
+            const aiResponse = await callAI(imagePostPrompt, conversationHistory, userContext);
+            const postContent = extractPostContent(aiResponse);
+            
+            if (postContent) {
+              // Schedule each post at different times (spread across the day)
+              const scheduledTime = new Date();
+              scheduledTime.setHours(scheduledTime.getHours() + (i * 2) + 1); // Space posts 2 hours apart
+              
+              posts.push({
+                id: `post-${Date.now()}-${i}`,
+                content: postContent,
+                suggestedTime: scheduledTime.toISOString(),
+                reasoning: `Post ${postIndex} of ${imageUrls.length} - created from uploaded image`,
+                scheduledDateTime: scheduledTime.toISOString(),
+                generateImage: false, // Image already provided
+                imageUrl: imageUrl, // Attach the uploaded image
+                imagePrompt: null,
+              });
+            }
+          } catch (error) {
+            console.error(`Error generating post for image ${postIndex}:`, error);
+          }
+        }
+        
+        if (posts.length > 0) {
+          response = `🖼️ Created ${posts.length} post(s) for your uploaded images!\n\nEach post has been paired with its image and scheduled at different times to maximize engagement.\n\nYou can:\n• Edit any post content\n• Change the schedule\n• Post now or schedule for later`;
+        } else {
+          response = "I had trouble creating posts for your images. Please try again or provide more specific instructions.";
+        }
         break;
       }
 
