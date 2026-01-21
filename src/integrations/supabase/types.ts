@@ -148,10 +148,13 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          last_error: string | null
           linkedin_post_id: string | null
           linkedin_post_url: string | null
+          next_retry_at: string | null
           photo_url: string | null
           posted_at: string | null
+          retry_count: number | null
           scheduled_time: string | null
           status: string | null
           updated_at: string
@@ -161,10 +164,13 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          last_error?: string | null
           linkedin_post_id?: string | null
           linkedin_post_url?: string | null
+          next_retry_at?: string | null
           photo_url?: string | null
           posted_at?: string | null
+          retry_count?: number | null
           scheduled_time?: string | null
           status?: string | null
           updated_at?: string
@@ -174,10 +180,13 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          last_error?: string | null
           linkedin_post_id?: string | null
           linkedin_post_url?: string | null
+          next_retry_at?: string | null
           photo_url?: string | null
           posted_at?: string | null
+          retry_count?: number | null
           scheduled_time?: string | null
           status?: string | null
           updated_at?: string

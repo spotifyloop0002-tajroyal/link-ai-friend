@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { GeneratedPost } from "@/hooks/useAgentChat";
 import { formatDistanceToNow } from "date-fns";
+import { formatDateOnlyIST, formatTimeIST } from "@/lib/timezoneUtils";
 
 interface PostPreviewCardProps {
   post: GeneratedPost;
@@ -48,16 +49,8 @@ export function PostPreviewCard({
   const [editedContent, setEditedContent] = useState(post.content);
 
   const scheduledDate = new Date(post.scheduledDateTime);
-  const formattedDate = scheduledDate.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  const formattedTime = scheduledDate.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedDate = formatDateOnlyIST(scheduledDate);
+  const formattedTime = formatTimeIST(scheduledDate);
 
   const handleSaveEdit = () => {
     onUpdate({ content: editedContent });
@@ -210,7 +203,7 @@ export function PostPreviewCard({
           </div>
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Clock className="w-3.5 h-3.5" />
-            <span>{formattedTime}</span>
+            <span>{formattedTime} IST</span>
           </div>
         </div>
         {post.reasoning && (
