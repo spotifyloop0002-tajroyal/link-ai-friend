@@ -260,18 +260,30 @@ const AgentChatPage = () => {
         // Send to extension immediately with proper format including trackingId
         addActivityEntry("sending", `Scheduling for ${format(scheduledTime, 'MMM d, h:mm a')}...`, savedPost.id);
         
+        // CRITICAL: Ensure scheduledTime is ALWAYS a valid ISO string (not undefined/NaN)
+        const validScheduledTime = scheduledTime.toISOString();
+        
+        // Validate we have required fields before sending
+        if (!savedPost.trackingId) {
+          console.error("❌ Missing trackingId on saved post");
+          addActivityEntry("failed", "Missing tracking ID", savedPost.id);
+          toast.error("Failed to schedule: missing tracking ID");
+          return;
+        }
+        
         // Extension expects: id, trackingId, content, imageUrl, scheduledTime, userId
         const postForExtension = {
           id: savedPost.dbId || savedPost.id,
           trackingId: savedPost.trackingId, // CRITICAL: Extension uses this for alarm name
           content: savedPost.content,
-          imageUrl: savedPost.imageUrl, // Extension uses imageUrl, not photo_url
-          scheduledTime: savedPost.scheduledTime || scheduledTime.toISOString(), // Extension uses scheduledTime
-          photo_url: savedPost.imageUrl, // Also include for backwards compatibility
-          scheduled_time: savedPost.scheduledTime || scheduledTime.toISOString(),
+          imageUrl: savedPost.imageUrl || undefined,
+          scheduledTime: validScheduledTime, // MUST be a valid ISO string - never undefined
+          photo_url: savedPost.imageUrl || undefined,
+          scheduled_time: validScheduledTime,
         };
         
         console.log("📤 Sending to extension:", postForExtension);
+        console.log("📤 scheduledTime value:", validScheduledTime, "Type:", typeof validScheduledTime);
         
         const result = await sendPendingPosts([postForExtension as any]);
         
