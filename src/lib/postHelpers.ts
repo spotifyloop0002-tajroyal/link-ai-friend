@@ -3,21 +3,103 @@
 // ============================================================================
 
 /**
- * Clean post content by removing excessive newlines and fixing spacing
+ * Clean post content by removing markdown and fixing spacing
  */
 export function cleanPostContent(content: string): string {
   return content
-    // Remove more than 2 consecutive newlines
-    .replace(/\n{3,}/g, '\n\n')
-    // Remove leading/trailing whitespace
-    .trim()
-    // Remove excessive spaces at the start of lines (keep some for formatting)
-    .replace(/^\s+/gm, '')
-    // Ensure consistent spacing around bullet points
-    .replace(/\n•/g, '\n\n•')
-    .replace(/•\s+/g, '• ')
-    // Clean up multiple spaces
-    .replace(/  +/g, ' ');
+    // Remove Gemini's code block wrappers
+    .replace(/^```[\w]*\n/gm, '')
+    .replace(/\n```$/gm, '')
+    
+    // Remove ALL markdown formatting
+    .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')  // Bold+italic ***text***
+    .replace(/\*\*([^*]+)\*\*/g, '$1')       // Bold **text**
+    .replace(/\*([^*]+)\*/g, '$1')           // Italic *text*
+    .replace(/_([^_]+)_/g, '$1')             // Italic _text_
+    .replace(/~~([^~]+)~~/g, '$1')           // Strikethrough ~~text~~
+    .replace(/`([^`]+)`/g, '$1')             // Inline code `text`
+    .replace(/^#{1,6}\s+/gm, '')             // Headers # ## ###
+    
+    // Remove bullet points and numbered lists
+    .replace(/^\s*[-*+•]\s+/gm, '')          // Bullet points
+    .replace(/^\s*\d+[\.)]\s+/gm, '')        // Numbered lists 1. 1)
+    .replace(/^\s*[a-z][\.)]\s+/gm, '')      // Letter lists a. a)
+    
+    // Fix excessive spacing
+    .replace(/\n{4,}/g, '\n\n\n')            // Max 2 blank lines
+    .replace(/[ \t]{2,}/g, ' ')              // Multiple spaces → single
+    .replace(/^\s+/gm, '')                   // Remove leading whitespace
+    .replace(/\s+$/gm, '')                   // Remove trailing whitespace
+    
+    // Clean up around emojis
+    .replace(/\n{2,}([\u{1F300}-\u{1F9FF}])/gu, '\n$1')
+    .replace(/([\u{1F300}-\u{1F9FF}])\n{2,}/gu, '$1\n')
+    
+    // Fix excessive punctuation
+    .replace(/\.{3,}/g, '...')               // Multiple dots → ellipsis
+    .replace(/!{2,}/g, '!')                  // Multiple ! → single
+    .replace(/\?{2,}/g, '?')                 // Multiple ? → single
+    
+    .trim();
+}
+
+/**
+ * Humanize post content by replacing AI phrases with casual human ones
+ */
+export function humanizePost(content: string): string {
+  let humanized = content;
+  
+  const replacements: [RegExp, string][] = [
+    // Conclusions
+    [/In conclusion,/gi, 'Bottom line:'],
+    [/To conclude,/gi, 'Look,'],
+    [/To summarize,/gi, "Here's the deal:"],
+    [/In summary,/gi, "Here's what matters:"],
+    
+    // Sharing phrases
+    [/Let me share/gi, "Here's"],
+    [/I'd like to share/gi, "Gonna share"],
+    [/I want to share/gi, "Here's"],
+    
+    // Formal transitions
+    [/Furthermore,/gi, 'Plus,'],
+    [/Moreover,/gi, 'Also,'],
+    [/Additionally,/gi, 'And'],
+    [/However,/gi, 'But'],
+    [/Therefore,/gi, 'So'],
+    
+    // Force contractions
+    [/\bI am\b/g, "I'm"],
+    [/\bYou are\b/g, "You're"],
+    [/\bWe are\b/g, "We're"],
+    [/\bIt is\b/g, "It's"],
+    [/\bdo not\b/gi, "don't"],
+    [/\bcannot\b/gi, "can't"],
+    [/\bwill not\b/gi, "won't"],
+    
+    // Buzzwords
+    [/\bleverage\b/gi, 'use'],
+    [/\butilize\b/gi, 'use'],
+    [/\bsynergy\b/gi, 'teamwork'],
+    [/\boptimize\b/gi, 'improve'],
+    
+    // Formal phrases
+    [/In order to/gi, 'To'],
+    [/I would like to/gi, "I want to"],
+    [/For example,/gi, "Like,"],
+    
+    // AI starters
+    [/^As a .+?, I/gm, 'I'],
+  ];
+  
+  for (const [pattern, replacement] of replacements) {
+    humanized = humanized.replace(pattern, replacement);
+  }
+  
+  // Remove generic engagement endings
+  humanized = humanized.replace(/\n\n(What do you think\?|Thoughts\?|What's your take\?)\s*$/gi, '');
+  
+  return humanized;
 }
 
 /**

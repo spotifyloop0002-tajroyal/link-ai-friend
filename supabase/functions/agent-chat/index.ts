@@ -336,7 +336,64 @@ CRITICAL BEHAVIOR RULES
    [LinkedIn post content here]
    ---
    
-   Then ask: "What do you think? Want any changes?"`;
+   Then ask: "What do you think? Want any changes?"
+
+═══════════════════════════════════════════
+🎯 CRITICAL HUMANIZATION RULES - MUST FOLLOW
+═══════════════════════════════════════════
+
+1. WRITE LIKE A REAL PERSON (NOT AI):
+   ✓ ALWAYS use contractions: "I'm" NOT "I am", "don't" NOT "do not"
+   ✓ Be conversational: write like texting a smart colleague
+   ✓ Add personal voice: "I think", "in my experience", "I've noticed"
+   ✓ Show emotion: "This surprised me", "I was wrong", "Here's what frustrated me"
+
+2. BANNED PHRASES (NEVER USE):
+   ✗ "Let me share" → Use "Here's" instead
+   ✗ "In conclusion" → Use "Bottom line:" instead  
+   ✗ "As a [profession], I..." → Just use "I..."
+   ✗ "Furthermore", "Moreover" → Use "Plus,", "Also,"
+   ✗ Buzzwords: leverage, synergy, optimize, utilize, empower
+
+3. BANNED FORMATTING:
+   ✗ NO numbered lists (1. 2. 3.)
+   ✗ NO bullet points (• - *)
+   ✗ NO bold (**text**)
+   ✗ NO italic (*text*)
+   ✗ Just plain text with line breaks
+
+4. REQUIRED STRUCTURE:
+   ✓ START: Hook (question, bold statement, or mini-story)
+   ✓ MIDDLE: Short paragraphs (2-3 lines max)
+   ✓ END: Insight (NOT "What do you think?")
+
+5. SENTENCE STYLE:
+   ✓ Mix short and long sentences
+   ✓ Start with "And" or "But" (allowed!)
+   ✓ One idea per sentence
+   ✓ Write like you talk
+
+EXAMPLE - AI vs HUMAN:
+
+❌ AI VERSION:
+"As a software engineer, I am excited to share insights on optimizing team 
+synergy. Furthermore, it is important to leverage best practices. 
+What do you think?"
+
+✅ HUMAN VERSION:
+"I've been coding for 8 years.
+
+Here's what nobody tells you about teams:
+
+It's not the tech. It's not the process.
+
+It's trust.
+
+When engineers feel safe saying 'I don't know', teams ship faster.
+
+I learned this after a brutal Q3 failure."
+
+Output ONLY the post text. No explanations. No meta-commentary.`;
 }
 
 // ============================================
@@ -401,16 +458,104 @@ async function callAI(prompt: string, conversationHistory: any[] = [], userConte
 }
 
 // ============================================
-// CLEAN POST CONTENT - Remove excessive spacing
+// CLEAN POST CONTENT - Remove markdown & fix spacing
 // ============================================
 function cleanPostContent(content: string): string {
   return content
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .replace(/^[ \t]{3,}/gm, '')
-    .replace(/\n•/g, '\n\n•')
-    .replace(/•\s+/g, '• ')
-    .replace(/  +/g, ' ');
+    // Remove Gemini's code block wrappers
+    .replace(/^```[\w]*\n/gm, '')
+    .replace(/\n```$/gm, '')
+    
+    // Remove ALL markdown formatting
+    .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')  // Bold+italic ***text***
+    .replace(/\*\*([^*]+)\*\*/g, '$1')       // Bold **text**
+    .replace(/\*([^*]+)\*/g, '$1')           // Italic *text*
+    .replace(/_([^_]+)_/g, '$1')             // Italic _text_
+    .replace(/~~([^~]+)~~/g, '$1')           // Strikethrough ~~text~~
+    .replace(/`([^`]+)`/g, '$1')             // Inline code `text`
+    .replace(/^#{1,6}\s+/gm, '')             // Headers # ## ###
+    
+    // Remove bullet points and numbered lists
+    .replace(/^\s*[-*+•]\s+/gm, '')          // Bullet points
+    .replace(/^\s*\d+[\.)]\s+/gm, '')        // Numbered lists 1. 1)
+    .replace(/^\s*[a-z][\.)]\s+/gm, '')      // Letter lists a. a)
+    
+    // Fix excessive spacing
+    .replace(/\n{4,}/g, '\n\n\n')            // Max 2 blank lines
+    .replace(/[ \t]{2,}/g, ' ')              // Multiple spaces → single
+    .replace(/^\s+/gm, '')                   // Remove leading whitespace
+    .replace(/\s+$/gm, '')                   // Remove trailing whitespace
+    
+    // Clean up around emojis
+    .replace(/\n{2,}([\u{1F300}-\u{1F9FF}])/gu, '\n$1')
+    .replace(/([\u{1F300}-\u{1F9FF}])\n{2,}/gu, '$1\n')
+    
+    // Fix excessive punctuation
+    .replace(/\.{3,}/g, '...')               // Multiple dots → ellipsis
+    .replace(/!{2,}/g, '!')                  // Multiple ! → single
+    .replace(/\?{2,}/g, '?')                 // Multiple ? → single
+    
+    .trim();
+}
+
+// ============================================
+// HUMANIZE POST - Replace AI phrases with human ones
+// ============================================
+function humanizePost(content: string): string {
+  let humanized = content;
+  
+  // Replace formal AI phrases with casual human ones
+  const replacements: [RegExp, string][] = [
+    // Conclusions
+    [/In conclusion,/gi, 'Bottom line:'],
+    [/To conclude,/gi, 'Look,'],
+    [/To summarize,/gi, "Here's the deal:"],
+    [/In summary,/gi, "Here's what matters:"],
+    
+    // Sharing phrases
+    [/Let me share/gi, "Here's"],
+    [/I'd like to share/gi, "Gonna share"],
+    [/I want to share/gi, "Here's"],
+    
+    // Formal transitions
+    [/Furthermore,/gi, 'Plus,'],
+    [/Moreover,/gi, 'Also,'],
+    [/Additionally,/gi, 'And'],
+    [/However,/gi, 'But'],
+    [/Therefore,/gi, 'So'],
+    
+    // Force contractions
+    [/\bI am\b/g, "I'm"],
+    [/\bYou are\b/g, "You're"],
+    [/\bWe are\b/g, "We're"],
+    [/\bIt is\b/g, "It's"],
+    [/\bdo not\b/gi, "don't"],
+    [/\bcannot\b/gi, "can't"],
+    [/\bwill not\b/gi, "won't"],
+    
+    // Buzzwords
+    [/\bleverage\b/gi, 'use'],
+    [/\butilize\b/gi, 'use'],
+    [/\bsynergy\b/gi, 'teamwork'],
+    [/\boptimize\b/gi, 'improve'],
+    
+    // Formal phrases
+    [/In order to/gi, 'To'],
+    [/I would like to/gi, "I want to"],
+    [/For example,/gi, "Like,"],
+    
+    // AI starters
+    [/^As a .+?, I/gm, 'I'],
+  ];
+  
+  for (const [pattern, replacement] of replacements) {
+    humanized = humanized.replace(pattern, replacement);
+  }
+  
+  // Remove generic engagement endings
+  humanized = humanized.replace(/\n\n(What do you think\?|Thoughts\?|What's your take\?)\s*$/gi, '');
+  
+  return humanized;
 }
 
 // ============================================
@@ -915,8 +1060,11 @@ Or would you prefer different topics/timing?`;
         response = await callAI(enhancedPrompt, conversationHistory, userContext, agentType);
 
         // Extract post if AI created one
-        const postContent = extractPostContent(response);
-        if (postContent) {
+        const extracted = extractPostContent(response);
+        if (extracted) {
+          // Apply cleaning and humanization
+          const cleaned = cleanPostContent(extracted);
+          const postContent = humanizePost(cleaned);
           const imagePrompt = generateImagePromptFromPost(postContent);
           
           posts = [{
@@ -938,8 +1086,11 @@ Or would you prefer different topics/timing?`;
         response = await callAI(message, conversationHistory, userContext, agentType);
         
         // Check if AI created a post in the response
-        const postContent = extractPostContent(response);
-        if (postContent) {
+        const extracted = extractPostContent(response);
+        if (extracted) {
+          // Apply cleaning and humanization
+          const cleaned = cleanPostContent(extracted);
+          const postContent = humanizePost(cleaned);
           const imagePrompt = generateImagePromptFromPost(postContent);
           
           posts = [{
