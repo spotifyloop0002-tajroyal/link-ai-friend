@@ -330,13 +330,30 @@ CRITICAL BEHAVIOR RULES
    - If data is unavailable, use neutral framing
    - Say "Based on industry trends..." not "Based on your 500% growth..."
 
-5. **POST FORMAT**:
-   When creating a post, wrap content between --- markers:
+5. **POST FORMAT - ONLY FOR ACTUAL LINKEDIN POSTS**:
+   ONLY use --- markers when you are creating an ACTUAL LinkedIn post for the user.
    ---
    [LinkedIn post content here]
    ---
    
-   Then ask: "What do you think? Want any changes?"
+   DO NOT use --- markers for:
+   - Topic suggestions
+   - Questions to the user
+   - General conversation
+   - Image prompts or instructions
+   - Any other non-post content
+
+6. **IMAGE GENERATION - IMPORTANT**:
+   - The system generates images automatically when requested
+   - NEVER output JSON like {"action": "dalle.text2im"...}
+   - NEVER pretend to be a tool or API
+   - If user asks for an image, just say "I'll generate an image for your post"
+   - The backend handles image generation - you just write posts
+
+7. **WHEN USER SAYS "generate image"**:
+   - If they just created a post, respond: "Generating an AI image for your post... 🎨"
+   - DO NOT output any JSON, code blocks, or tool calls
+   - The image will be generated automatically by the system
 
 ═══════════════════════════════════════════
 🎯 CRITICAL HUMANIZATION RULES - MUST FOLLOW
@@ -700,60 +717,51 @@ Requirements: No text overlay, visually represent the concept, minimalist`;
 // EXTRACT POST CONTENT FROM AI RESPONSE
 // ============================================
 function extractPostContent(aiResponse: string): string | null {
+  // Check if response contains JSON (AI hallucinating tool calls) - REJECT
+  if (aiResponse.includes('"action":') && aiResponse.includes('"action_input":')) {
+    console.log("⚠️ Detected hallucinated JSON tool call - ignoring");
+    return null;
+  }
+  
+  // Check if response starts with '{' and looks like JSON - REJECT
+  const trimmed = aiResponse.trim();
+  if (trimmed.startsWith('{') && trimmed.includes('"action"')) {
+    console.log("⚠️ Detected JSON object - not a post");
+    return null;
+  }
+  
   // Try the standard marker pattern first
   const markerPattern = /---\s*\n([\s\S]+?)\n\s*---/;
   const match = aiResponse.match(markerPattern);
   
   if (match && match[1]) {
-    return cleanPostContent(match[1]);
+    const content = match[1].trim();
+    // Make sure the content between markers is actually a post, not topic suggestions
+    if (content.includes('📋') || content.includes('Suggested Topics') || content.includes('Would you like')) {
+      console.log("⚠️ Content is topic suggestions, not a post");
+      return null;
+    }
+    return cleanPostContent(content);
   }
   
   // Try alternate marker patterns (sometimes AI uses different formats)
   const altPatterns = [
     /---\s*([\s\S]+?)\s*---/, // Less strict whitespace
-    /```\s*\n?([\s\S]+?)\n?\s*```/, // Code block format
-    /\*\*Post:\*\*\s*\n([\s\S]+?)(?:\n\n|$)/, // Bold header format
   ];
   
   for (const pattern of altPatterns) {
     const altMatch = aiResponse.match(pattern);
-    if (altMatch && altMatch[1] && altMatch[1].trim().length > 20) {
-      return cleanPostContent(altMatch[1]);
-    }
-  }
-  
-  // Fallback: If no markers found, check if the whole response looks like a post
-  // (contains newlines, reasonable length, no obvious conversational phrases at start)
-  const cleanResponse = aiResponse.trim();
-  const isLikelyPost = 
-    cleanResponse.length > 50 && 
-    cleanResponse.length < 3000 &&
-    !cleanResponse.toLowerCase().startsWith("i ") &&
-    !cleanResponse.toLowerCase().startsWith("here") &&
-    !cleanResponse.toLowerCase().startsWith("sure") &&
-    !cleanResponse.toLowerCase().startsWith("let me") &&
-    !cleanResponse.toLowerCase().startsWith("of course") &&
-    (cleanResponse.includes("\n") || cleanResponse.includes("!") || cleanResponse.includes("?"));
-  
-  if (isLikelyPost) {
-    // Try to extract just the post content by removing any preamble
-    const lines = cleanResponse.split("\n");
-    let postStart = 0;
-    
-    // Skip introductory lines
-    for (let i = 0; i < Math.min(3, lines.length); i++) {
-      const line = lines[i].toLowerCase().trim();
-      if (line.startsWith("here") || line.startsWith("sure") || line.startsWith("i've") || line.includes("post:")) {
-        postStart = i + 1;
+    if (altMatch && altMatch[1] && altMatch[1].trim().length > 50) {
+      const content = altMatch[1].trim();
+      // Check it's not suggestions
+      if (!content.includes('📋') && !content.includes('Suggested Topics')) {
+        return cleanPostContent(content);
       }
     }
-    
-    const postContent = lines.slice(postStart).join("\n").trim();
-    if (postContent.length > 30) {
-      return cleanPostContent(postContent);
-    }
   }
   
+  // Don't auto-detect posts from general conversation - too risky
+  // Only accept posts wrapped in --- markers
   return null;
 }
 
@@ -855,6 +863,12 @@ function detectIntent(message: string, uploadedImages?: string[]): { type: strin
   // Ask for time (post without time)
   if (lower.includes("post it") || lower.includes("publish it") || lower.includes("post this")) {
     return { type: "ask_time" };
+  }
+
+  // Generate image request
+  if ((lower.includes("generate") || lower.includes("create") || lower.includes("make")) && 
+      (lower.includes("image") || lower.includes("picture") || lower.includes("photo"))) {
+    return { type: "generate_image" };
   }
 
   // Create post request
@@ -1176,6 +1190,28 @@ Or would you prefer different topics/timing?`;
           response = "I don't have any posts ready. Would you like me to create one first?\n\nJust say 'write a post about [topic]' 📝";
         } else {
           response = `When would you like to post this?\n\nYou can say:\n• **"post it now"** to publish immediately\n• **"post it at 3:30pm today"** to schedule\n• **"tomorrow at 2pm"** for next day\n\nI'll handle everything automatically!`;
+        }
+        break;
+      }
+
+      case "generate_image": {
+        if (!generatedPosts || generatedPosts.length === 0) {
+          response = "I don't have any posts to generate an image for. Would you like me to create a post first?\n\nJust say 'write a post about [topic]' 📝";
+        } else {
+          // Signal to frontend to generate image for the most recent post
+          response = "Generating an AI image for your post... 🎨";
+          action = "generate_image";
+          
+          return new Response(
+            JSON.stringify({
+              type: "generate_image",
+              message: response,
+              posts: [],
+              action: "generate_image",
+              postId: generatedPosts[0].id, // Generate for most recent post
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         break;
       }

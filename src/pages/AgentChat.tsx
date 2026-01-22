@@ -229,6 +229,13 @@ const AgentChatPage = () => {
 
     const response = await sendMessage(finalMessage, { generateImage: generatePhoto, uploadedImages: imageUrls });
     
+    // Handle generate_image response - generate image for specific post
+    if (response?.type === "generate_image" && response.postId) {
+      console.log("🎨 Generating image for post:", response.postId);
+      generateImageForPost(response.postId);
+      return;
+    }
+    
     // Handle auto_schedule response - automatically save and send to extension
     if (response?.type === "auto_schedule" && response.postToSchedule && response.scheduledTime) {
       console.log("🚀 Auto-scheduling post:", response);
