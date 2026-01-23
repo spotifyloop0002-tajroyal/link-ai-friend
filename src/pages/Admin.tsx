@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import AdminLayout from "@/components/admin/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -190,29 +190,29 @@ const AdminPage = () => {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <AdminLayout>
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      </DashboardLayout>
+      </AdminLayout>
     );
   }
 
   if (!isAdmin) {
     return (
-      <DashboardLayout>
+      <AdminLayout>
         <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
           <Shield className="w-16 h-16 text-muted-foreground" />
           <h1 className="text-2xl font-bold">Access Denied</h1>
           <p className="text-muted-foreground">You don't have permission to access the admin panel.</p>
           <Button onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
         </div>
-      </DashboardLayout>
+      </AdminLayout>
     );
   }
 
   return (
-    <DashboardLayout>
+    <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
         <motion.div
@@ -579,7 +579,7 @@ const AdminPage = () => {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+    </AdminLayout>
   );
 };
 
