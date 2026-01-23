@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot,
   LayoutDashboard,
@@ -16,7 +16,8 @@ import {
   User,
 } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { Button } from "@/components/ui/button";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,29 @@ const navItems = [
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { profile, isLoading } = useUserProfile();
+
+  // Get user initials for avatar
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "U";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  // Get plan display name
+  const getPlanName = (plan: string | null | undefined) => {
+    if (!plan) return "Free Plan";
+    return `${plan.charAt(0).toUpperCase()}${plan.slice(1)} Plan`;
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,12 +153,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <Avatar className="w-10 h-10">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      JD
+                      {isLoading ? "..." : getInitials(profile?.name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 text-left">
-                    <p className="text-sm font-medium">John Doe</p>
-                    <p className="text-xs text-sidebar-foreground/60">Pro Plan</p>
+                    <p className="text-sm font-medium">
+                      {isLoading ? "Loading..." : (profile?.name || "User")}
+                    </p>
+                    <p className="text-xs text-sidebar-foreground/60">
+                      {getPlanName(profile?.subscription_plan)}
+                    </p>
                   </div>
                   <ChevronDown className="w-4 h-4 text-sidebar-foreground/60" />
                 </button>
@@ -142,16 +170,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
                   <User className="w-4 h-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
                   <LogOut className="w-4 h-4 mr-2" />
                   Log out
                 </DropdownMenuItem>
@@ -180,7 +208,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <div className="lg:hidden">
                 <Avatar className="w-8 h-8">
                   <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                    JD
+                    {getInitials(profile?.name)}
                   </AvatarFallback>
                 </Avatar>
               </div>
