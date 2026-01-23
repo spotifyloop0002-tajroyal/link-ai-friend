@@ -365,6 +365,7 @@ export type Database = {
           industry: string | null
           last_active_at: string | null
           linkedin_profile_confirmed: boolean | null
+          linkedin_profile_data: Json | null
           linkedin_profile_edit_count: number | null
           linkedin_profile_url: string | null
           linkedin_profile_url_locked: boolean | null
@@ -379,6 +380,7 @@ export type Database = {
           posts_published_count: number | null
           posts_scheduled_count: number | null
           preferred_tone: string | null
+          profile_last_scraped: string | null
           role: string | null
           subscription_expires_at: string | null
           subscription_plan: string | null
@@ -400,6 +402,7 @@ export type Database = {
           industry?: string | null
           last_active_at?: string | null
           linkedin_profile_confirmed?: boolean | null
+          linkedin_profile_data?: Json | null
           linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
@@ -414,6 +417,7 @@ export type Database = {
           posts_published_count?: number | null
           posts_scheduled_count?: number | null
           preferred_tone?: string | null
+          profile_last_scraped?: string | null
           role?: string | null
           subscription_expires_at?: string | null
           subscription_plan?: string | null
@@ -435,6 +439,7 @@ export type Database = {
           industry?: string | null
           last_active_at?: string | null
           linkedin_profile_confirmed?: boolean | null
+          linkedin_profile_data?: Json | null
           linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
@@ -449,6 +454,7 @@ export type Database = {
           posts_published_count?: number | null
           posts_scheduled_count?: number | null
           preferred_tone?: string | null
+          profile_last_scraped?: string | null
           role?: string | null
           subscription_expires_at?: string | null
           subscription_plan?: string | null

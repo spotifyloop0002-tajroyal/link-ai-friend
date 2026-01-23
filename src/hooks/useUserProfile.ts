@@ -2,6 +2,19 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+export interface LinkedInProfileData {
+  username?: string;
+  profileUrl?: string;
+  followersCount?: number;
+  connectionsCount?: number;
+  fullName?: string;
+  headline?: string;
+  profilePhoto?: string;
+  currentRole?: string;
+  currentCompany?: string;
+  location?: string;
+}
+
 export interface UserProfile {
   id: string;
   user_id: string;
@@ -36,6 +49,9 @@ export interface UserProfile {
   last_active_at: string | null;
   created_at: string;
   updated_at: string;
+  // LinkedIn profile data fields
+  linkedin_profile_data: LinkedInProfileData | null;
+  profile_last_scraped: string | null;
 }
 
 export interface ProfileData {

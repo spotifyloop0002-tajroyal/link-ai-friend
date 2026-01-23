@@ -13,6 +13,7 @@ import AgentChat from "./pages/AgentChat";
 import CalendarPage from "./pages/CalendarPage";
 import Analytics from "./pages/Analytics";
 import LinkedInConnection from "./pages/LinkedInConnection";
+import LinkedInProfile from "./pages/LinkedInProfile";
 import Settings from "./pages/Settings";
 import Billing from "./pages/Billing";
 import Admin from "./pages/Admin";
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/dashboard/calendar" element={<CalendarPage />} />
           <Route path="/dashboard/analytics" element={<Analytics />} />
           <Route path="/dashboard/linkedin" element={<LinkedInConnection />} />
+          <Route path="/dashboard/profile" element={<LinkedInProfile />} />
           <Route path="/dashboard/settings" element={<Settings />} />
           <Route path="/dashboard/billing" element={<Billing />} />
           <Route path="/admin" element={<Admin />} />
