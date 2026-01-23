@@ -39,7 +39,7 @@ const App = () => (
           <Route path="/dashboard/linkedin" element={<LinkedInConnection />} />
           <Route path="/dashboard/settings" element={<Settings />} />
           <Route path="/dashboard/billing" element={<Billing />} />
-          <Route path="/dashboard/admin" element={<Admin />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

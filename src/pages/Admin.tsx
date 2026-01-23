@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
+import { AdminNotificationSender } from "@/components/admin/AdminNotificationSender";
 
 interface AdminUser {
   id: string;
@@ -278,6 +279,21 @@ const AdminPage = () => {
               </div>
             </CardContent>
           </Card>
+        </motion.div>
+
+        {/* Notification Sender */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <AdminNotificationSender 
+            users={users.map(u => ({ 
+              user_id: u.user_id, 
+              name: u.name, 
+              email: u.email 
+            }))} 
+          />
         </motion.div>
 
         {/* Filters */}

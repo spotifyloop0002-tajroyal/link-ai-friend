@@ -19,6 +19,8 @@ export interface UserProfile {
   posting_goals: string[] | null;
   linkedin_profile_url: string | null;
   linkedin_profile_url_locked: boolean;
+  linkedin_profile_edit_count: number;
+  linkedin_profile_confirmed: boolean;
   linkedin_username: string | null;
   preferred_tone: string | null;
   post_frequency: string | null;
@@ -53,6 +55,8 @@ export interface ProfileData {
   onboarding_completed?: boolean;
   linkedin_profile_url?: string;
   linkedin_profile_url_locked?: boolean;
+  linkedin_profile_edit_count?: number;
+  linkedin_profile_confirmed?: boolean;
   phone_number?: string;
   city?: string;
   country?: string;

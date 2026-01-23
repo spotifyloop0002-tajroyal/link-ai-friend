@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { useUserProfile } from "@/hooks/useUserProfile";
+import { useUserProfile, ProfileData } from "@/hooks/useUserProfile";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,8 +51,16 @@ const SettingsPage = () => {
   const [postFrequency, setPostFrequency] = useState(profile?.post_frequency || "");
   const [linkedinUrl, setLinkedinUrl] = useState(profile?.linkedin_profile_url || "");
 
-  // Check if LinkedIn URL is locked
-  const isLinkedInLocked = profile?.linkedin_profile_url_locked || !!profile?.linkedin_profile_url;
+  // LinkedIn URL edit logic: can only be edited once after initial entry
+  const editCount = profile?.linkedin_profile_edit_count || 0;
+  const isConfirmed = profile?.linkedin_profile_confirmed || false;
+  const hasExistingUrl = !!profile?.linkedin_profile_url;
+  
+  // Editing is disabled if: confirmed OR (has existing URL AND edit count >= 1)
+  const isLinkedInLocked = isConfirmed || (hasExistingUrl && editCount >= 1);
+  
+  // Can edit if: no existing URL OR (has URL but edit count is 0 and not confirmed)
+  const canEdit = !isConfirmed && (!hasExistingUrl || editCount === 0);
 
   // Update local state when profile loads
   useEffect(() => {
@@ -85,7 +93,7 @@ const SettingsPage = () => {
 
     setIsSaving(true);
     try {
-      const profileData: any = {
+      const profileData: ProfileData = {
         name,
         phone_number: phoneNumber,
         city,
@@ -96,10 +104,18 @@ const SettingsPage = () => {
         post_frequency: postFrequency,
       };
 
-      // Only include LinkedIn URL if not locked
-      if (!isLinkedInLocked && linkedinUrl) {
+      // Handle LinkedIn URL save with one-time edit logic
+      if (canEdit && linkedinUrl && linkedinUrl !== profile?.linkedin_profile_url) {
         profileData.linkedin_profile_url = linkedinUrl;
-        profileData.linkedin_profile_url_locked = true; // Lock after first save
+        profileData.linkedin_profile_url_locked = true;
+        
+        // If this is an edit (not initial), increment count and confirm
+        if (hasExistingUrl) {
+          // This is an edit - lock permanently
+          profileData.linkedin_profile_confirmed = true;
+        }
+        // Increment edit count (will be 1 after first save)
+        profileData.linkedin_profile_edit_count = editCount + 1;
       }
 
       const success = await saveProfile(profileData);
@@ -199,8 +215,9 @@ const SettingsPage = () => {
                       />
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This URL is locked and cannot be changed for security reasons.
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      🔒 LinkedIn profile locked and cannot be changed.
                     </p>
                   </>
                 ) : (
@@ -212,7 +229,10 @@ const SettingsPage = () => {
                     <Alert className="mt-3 border-warning/50 bg-warning/10">
                       <AlertCircle className="w-4 h-4 text-warning" />
                       <AlertDescription className="text-xs text-warning">
-                        <strong>Important:</strong> Once saved, this URL cannot be changed. All posting and scraping will happen on this profile only.
+                        <strong>⚠️ Important:</strong> You can edit your LinkedIn profile link only once. 
+                        {hasExistingUrl 
+                          ? " This is your final edit - please double-check before confirming."
+                          : " Please double-check before confirming."}
                       </AlertDescription>
                     </Alert>
                   </>

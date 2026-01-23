@@ -140,6 +140,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          title: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       post_analytics: {
         Row: {
           comments: number | null
@@ -334,6 +364,8 @@ export type Database = {
           id: string
           industry: string | null
           last_active_at: string | null
+          linkedin_profile_confirmed: boolean | null
+          linkedin_profile_edit_count: number | null
           linkedin_profile_url: string | null
           linkedin_profile_url_locked: boolean | null
           linkedin_username: string | null
@@ -367,6 +399,8 @@ export type Database = {
           id?: string
           industry?: string | null
           last_active_at?: string | null
+          linkedin_profile_confirmed?: boolean | null
+          linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
           linkedin_username?: string | null
@@ -400,6 +434,8 @@ export type Database = {
           id?: string
           industry?: string | null
           last_active_at?: string | null
+          linkedin_profile_confirmed?: boolean | null
+          linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
           linkedin_username?: string | null
