@@ -6,34 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MINUTES = [5, 15, 30]; // Exponential backoff
-
-interface ScheduledPost {
-  id: string;
-  content: string;
-  photo_url: string | null;
-  scheduled_time: string;
-  user_id: string;
-  status: string;
-  retry_count: number;
-}
-
 /**
- * Get current time in IST for logging
+ * DEPRECATED: Scheduling is now handled entirely by the Chrome extension.
+ * 
+ * This function only performs status checks and cleanup - it does NOT execute posts.
+ * The Chrome extension is the single source of truth for scheduling and publishing.
+ * 
+ * Website responsibilities:
+ * - Collect post content, date, time
+ * - Save to database
+ * - Send payload to Chrome extension
+ * 
+ * Extension responsibilities:
+ * - Store scheduling data locally
+ * - Execute posts at exact scheduled time
+ * - Send post results back to website
  */
+
 function getCurrentTimeIST(): string {
   return new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-}
-
-/**
- * Calculate next retry time with exponential backoff
- */
-function calculateNextRetryTime(retryCount: number): string {
-  const delayMinutes = RETRY_DELAY_MINUTES[retryCount] || 60;
-  const nextRetry = new Date();
-  nextRetry.setMinutes(nextRetry.getMinutes() + delayMinutes);
-  return nextRetry.toISOString();
 }
 
 serve(async (req) => {
@@ -47,145 +38,64 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    console.log(`[${getCurrentTimeIST()} IST] Processing scheduled posts...`);
+    console.log(`[${getCurrentTimeIST()} IST] Post status check (execution handled by extension)...`);
 
-    // Get all posts that are due for posting
     const now = new Date().toISOString();
     
-    // 1. Get scheduled posts that are due
-    const { data: duePosts, error: fetchError } = await supabase
+    // Only check for stale posts that might need attention
+    // This is for monitoring only - NOT for execution
+    const { data: stalePosts, error: fetchError } = await supabase
       .from('posts')
-      .select('*')
+      .select('id, status, scheduled_time, sent_to_extension_at')
       .eq('status', 'scheduled')
       .lte('scheduled_time', now)
       .order('scheduled_time', { ascending: true })
-      .limit(10);
+      .limit(50);
 
     if (fetchError) {
-      console.error('Error fetching scheduled posts:', fetchError);
+      console.error('Error fetching posts:', fetchError);
       throw fetchError;
     }
 
-    // 2. Get failed posts that are ready for retry
-    const { data: retryPosts, error: retryError } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('status', 'failed')
-      .lt('retry_count', MAX_RETRIES)
-      .lte('next_retry_at', now)
-      .order('next_retry_at', { ascending: true })
-      .limit(5);
+    // Posts that are overdue but never sent to extension - flag them
+    const notSentToExtension = (stalePosts || []).filter(
+      p => !p.sent_to_extension_at
+    );
 
-    if (retryError) {
-      console.error('Error fetching retry posts:', retryError);
-    }
+    // Posts that were sent but are still scheduled (extension may have failed)
+    const possiblyStuck = (stalePosts || []).filter(
+      p => p.sent_to_extension_at
+    );
 
-    const allPosts = [...(duePosts || []), ...(retryPosts || [])];
-    
-    console.log(`[${getCurrentTimeIST()} IST] Found ${allPosts.length} posts to process`);
-
-    const results = {
-      processed: 0,
-      pending: 0,
-      failed: 0,
-      maxRetriesReached: 0,
-      posts: [] as { id: string; status: string; error?: string }[],
-    };
-
-    for (const post of allPosts) {
-      console.log(`[${getCurrentTimeIST()} IST] Processing post ${post.id}...`);
-      
-      try {
-        // Mark post as pending (being processed)
-        await supabase
-          .from('posts')
-          .update({ 
-            status: 'pending',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', post.id);
-
-        results.pending++;
-
-        // NOTE: The actual posting is done by the browser extension
-        // This function marks posts as ready for the extension to pick up
-        // In a real implementation, you would trigger the extension here
-        
-        // For now, we'll mark posts as ready for the extension
-        // The extension polls for 'pending' posts and processes them
-
-        results.posts.push({
-          id: post.id,
-          status: 'pending',
-        });
-
-        console.log(`[${getCurrentTimeIST()} IST] Post ${post.id} marked as pending for extension`);
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const currentRetryCount = (post.retry_count || 0) + 1;
-
-        console.error(`[${getCurrentTimeIST()} IST] Error processing post ${post.id}:`, errorMessage);
-
-        if (currentRetryCount >= MAX_RETRIES) {
-          // Max retries reached - mark as permanently failed
-          await supabase
-            .from('posts')
-            .update({
-              status: 'failed',
-              last_error: `Max retries (${MAX_RETRIES}) reached. Last error: ${errorMessage}`,
-              retry_count: currentRetryCount,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', post.id);
-
-          results.maxRetriesReached++;
-          results.posts.push({
-            id: post.id,
-            status: 'failed_permanently',
-            error: errorMessage,
-          });
-        } else {
-          // Schedule for retry
-          const nextRetryAt = calculateNextRetryTime(currentRetryCount);
-          
-          await supabase
-            .from('posts')
-            .update({
-              status: 'failed',
-              last_error: errorMessage,
-              retry_count: currentRetryCount,
-              next_retry_at: nextRetryAt,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', post.id);
-
-          results.failed++;
-          results.posts.push({
-            id: post.id,
-            status: 'retry_scheduled',
-            error: `Retry ${currentRetryCount}/${MAX_RETRIES} at ${new Date(nextRetryAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`,
-          });
-        }
-      }
-    }
-
-    results.processed = allPosts.length;
-
-    console.log(`[${getCurrentTimeIST()} IST] Processing complete:`, results);
+    console.log(`[${getCurrentTimeIST()} IST] Status check complete:`, {
+      totalOverdue: stalePosts?.length || 0,
+      notSentToExtension: notSentToExtension.length,
+      possiblyStuck: possiblyStuck.length,
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
+        message: "Status check only - execution handled by Chrome extension",
         timestamp: new Date().toISOString(),
         timestampIST: getCurrentTimeIST(),
-        results,
+        stats: {
+          overduePostsFound: stalePosts?.length || 0,
+          notSentToExtension: notSentToExtension.length,
+          possiblyStuckInExtension: possiblyStuck.length,
+        },
+        // These posts may need manual attention
+        postsNeedingAttention: notSentToExtension.map(p => ({
+          id: p.id,
+          scheduledTime: p.scheduled_time,
+          issue: "Never sent to extension"
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error(`[${getCurrentTimeIST()} IST] Process scheduled posts error:`, error);
+    console.error(`[${getCurrentTimeIST()} IST] Status check error:`, error);
     return new Response(
       JSON.stringify({
         success: false,

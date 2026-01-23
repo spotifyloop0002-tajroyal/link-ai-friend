@@ -7,6 +7,7 @@ import { MissingProfileBanner } from "@/components/linkedin/MissingProfileBanner
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useLinkedInAnalytics } from "@/hooks/useLinkedInAnalytics";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { useAgents } from "@/hooks/useAgents";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Bot,
@@ -18,6 +19,7 @@ import {
   Edit,
   Trash2,
   Loader2,
+  Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -34,6 +36,7 @@ const DashboardPage = () => {
   const { isConnected, sendPendingPosts } = useLinkedBotExtension();
   const { profile, isLoading: profileLoading } = useUserProfile();
   const { posts: analyticsPosts, isLoading: analyticsLoading } = useLinkedInAnalytics();
+  const { agents, isLoading: agentsLoading } = useAgents();
   
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
@@ -86,35 +89,43 @@ const DashboardPage = () => {
     };
   }, []);
 
-  // Calculate real stats
+  // Calculate real stats - dynamic agent count
   const totalViews = analyticsPosts.reduce((sum, p) => sum + (p.views || 0), 0);
   const scheduledCount = scheduledPosts.length;
+  const activeAgentsCount = agents.filter(a => a.is_active).length;
 
   const stats = [
+    {
+      label: "Active Agents",
+      value: activeAgentsCount.toString(),
+      subtitle: "AI content creators",
+      icon: Users,
+      color: "from-primary to-primary/60",
+    },
     {
       label: "Posts Created",
       value: profile?.posts_created_count?.toString() || "0",
       subtitle: "Total generated",
       icon: Bot,
-      color: "from-primary to-primary/60",
+      color: "from-secondary to-secondary/60",
     },
     {
       label: "Upcoming Posts",
       value: scheduledCount.toString(),
       subtitle: "Scheduled to publish",
       icon: Calendar,
-      color: "from-secondary to-secondary/60",
+      color: "from-warning to-warning/60",
     },
     {
       label: "Total Reach",
       value: totalViews >= 1000 ? `${(totalViews / 1000).toFixed(1)}K` : totalViews.toString(),
       subtitle: "From synced analytics",
       icon: TrendingUp,
-      color: "from-warning to-warning/60",
+      color: "from-success to-success/60",
     },
   ];
 
-  const isLoading = profileLoading || analyticsLoading || postsLoading;
+  const isLoading = profileLoading || analyticsLoading || postsLoading || agentsLoading;
 
   if (isLoading) {
     return (
@@ -169,7 +180,7 @@ const DashboardPage = () => {
         </motion.div>
 
         {/* Stats grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, index) => (
             <motion.div
               key={index}
