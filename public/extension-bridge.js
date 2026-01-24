@@ -38,24 +38,25 @@ window.LinkedBotBridge = {
     this.notifyPostFailure(data);
   },
   
-  // Notify backend of successful post - updates posts table
+  // Notify backend of successful post - updates posts table via sync-post
   notifyPostSuccess: async function(data) {
     try {
       const supabaseUrl = 'https://glrgfnqdzwbpkcsoxsgd.supabase.co';
-      const response = await fetch(`${supabaseUrl}/functions/v1/post-success`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/sync-post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId: data.postId,
           trackingId: data.trackingId,
           userId: data.userId,
+          status: 'posted',
           postedAt: data.postedAt || new Date().toISOString(),
           linkedinUrl: data.linkedinUrl
         })
       });
       
       const result = await response.json();
-      console.log('🔗 Bridge: Backend notified of post success:', result);
+      console.log('🔗 Bridge: Backend sync-post response:', result);
       
       if (!result.success) {
         console.error('🔗 Bridge: Backend error:', result.error);

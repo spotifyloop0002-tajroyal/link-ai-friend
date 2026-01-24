@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,21 @@ import {
   Trash2,
   Loader2,
   Users,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 interface ScheduledPost {
   id: string;
   content: string;
   scheduled_time: string;
   status: string;
+  posted_at?: string;
+  linkedin_post_url?: string;
 }
 
 const DashboardPage = () => {
@@ -41,32 +47,95 @@ const DashboardPage = () => {
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
 
-  // Fetch scheduled posts from database
+  // Fetch posts from database (scheduled + recently posted)
+  const fetchPosts = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("posts")
+        .select("id, content, scheduled_time, status, posted_at, linkedin_post_url")
+        .eq("user_id", user.id)
+        .in("status", ["scheduled", "posted", "failed"])
+        .order("scheduled_time", { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+      setScheduledPosts(data || []);
+    } catch (err) {
+      console.error("Error fetching posts:", err);
+    } finally {
+      setPostsLoading(false);
+    }
+  }, []);
+
+  // Initial fetch
   useEffect(() => {
-    const fetchScheduledPosts = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+    fetchPosts();
+  }, [fetchPosts]);
 
-        const { data, error } = await supabase
-          .from("posts")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("status", "scheduled")
-          .order("scheduled_time", { ascending: true })
-          .limit(10);
+  // Real-time subscription for post status changes
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-        if (error) throw error;
-        setScheduledPosts(data || []);
-      } catch (err) {
-        console.error("Error fetching posts:", err);
-      } finally {
-        setPostsLoading(false);
-      }
+    const setupRealtimeSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel('dashboard-posts-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'posts',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('📡 Real-time post update:', payload);
+            // Update the post in state immediately
+            setScheduledPosts(prev => 
+              prev.map(post => 
+                post.id === payload.new.id 
+                  ? { ...post, ...payload.new as ScheduledPost }
+                  : post
+              )
+            );
+          }
+        )
+        .subscribe((status) => {
+          console.log('Dashboard realtime subscription:', status);
+        });
     };
 
-    fetchScheduledPosts();
+    setupRealtimeSubscription();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
+
+  // Polling fallback - refetch every 15 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchPosts();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [fetchPosts]);
+
+  // Refetch on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchPosts();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchPosts]);
 
   // Listen for extension events
   useEffect(() => {
@@ -239,18 +308,46 @@ const DashboardPage = () => {
                         <div className="flex items-center gap-2 text-sm">
                           <Clock className="w-4 h-4 text-muted-foreground" />
                           <span>
-                            {format(new Date(post.scheduled_time), "MMM d, yyyy 'at' h:mm a")}
+                            {post.posted_at 
+                              ? format(new Date(post.posted_at), "MMM d, yyyy 'at' h:mm a")
+                              : post.scheduled_time 
+                                ? format(new Date(post.scheduled_time), "MMM d, yyyy 'at' h:mm a")
+                                : 'Not scheduled'
+                            }
                           </span>
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warning/10 text-warning text-xs font-medium capitalize">
-                          <Clock className="w-3 h-3" />
-                          {post.status}
-                        </span>
+                        {post.status === 'posted' ? (
+                          <Badge variant="default" className="bg-success/10 text-success border-success/20 gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Posted
+                          </Badge>
+                        ) : post.status === 'failed' ? (
+                          <Badge variant="destructive" className="gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Failed
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
+                            <Clock className="w-3 h-3" />
+                            Scheduled
+                          </Badge>
+                        )}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
+                          {post.linkedin_post_url && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => window.open(post.linkedin_post_url, '_blank')}
+                              title="View on LinkedIn"
+                            >
+                              <ExternalLink className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-8 w-8">
                             <Eye className="w-4 h-4" />
                           </Button>
