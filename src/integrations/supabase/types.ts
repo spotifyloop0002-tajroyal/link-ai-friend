@@ -287,6 +287,7 @@ export type Database = {
           tracking_id: string | null
           updated_at: string
           user_id: string
+          verified: boolean | null
           views_count: number | null
         }
         Insert: {
@@ -313,6 +314,7 @@ export type Database = {
           tracking_id?: string | null
           updated_at?: string
           user_id: string
+          verified?: boolean | null
           views_count?: number | null
         }
         Update: {
@@ -339,6 +341,7 @@ export type Database = {
           tracking_id?: string | null
           updated_at?: string
           user_id?: string
+          verified?: boolean | null
           views_count?: number | null
         }
         Relationships: [

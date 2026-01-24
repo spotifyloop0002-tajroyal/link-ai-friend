@@ -35,6 +35,36 @@ interface ScheduledPost {
   status: string;
   posted_at?: string;
   linkedin_post_url?: string;
+  verified?: boolean;
+}
+
+// LinkedIn URL validation pattern
+const LINKEDIN_URL_PATTERN = /linkedin\.com\/(posts|feed).*activity[-:][0-9]{19}/;
+
+// Helper to determine display status
+function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pending' | 'scheduled_overdue' | 'scheduled' | 'failed' {
+  const now = new Date();
+  const scheduledTime = post.scheduled_time ? new Date(post.scheduled_time) : null;
+  const isOverdue = scheduledTime && scheduledTime < now;
+  
+  // If status is posted
+  if (post.status === 'posted') {
+    // Check if we have a valid LinkedIn URL
+    const hasValidUrl = post.linkedin_post_url && LINKEDIN_URL_PATTERN.test(post.linkedin_post_url);
+    return hasValidUrl ? 'published' : 'posted_pending';
+  }
+  
+  // If status is failed
+  if (post.status === 'failed') {
+    return 'failed';
+  }
+  
+  // If still scheduled but time has passed - should not show as scheduled
+  if (post.status === 'scheduled' && isOverdue) {
+    return 'scheduled_overdue';
+  }
+  
+  return 'scheduled';
 }
 
 const DashboardPage = () => {
@@ -318,22 +348,46 @@ const DashboardPage = () => {
                         </div>
                       </td>
                       <td className="p-4">
-                        {post.status === 'posted' ? (
-                          <Badge variant="default" className="bg-success/10 text-success border-success/20 gap-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Posted
-                          </Badge>
-                        ) : post.status === 'failed' ? (
-                          <Badge variant="destructive" className="gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            Failed
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
-                            <Clock className="w-3 h-3" />
-                            Scheduled
-                          </Badge>
-                        )}
+                        {(() => {
+                          const displayStatus = getPostDisplayStatus(post);
+                          switch (displayStatus) {
+                            case 'published':
+                              return (
+                                <Badge variant="default" className="bg-success/10 text-success border-success/20 gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Published
+                                </Badge>
+                              );
+                            case 'posted_pending':
+                              return (
+                                <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Posted (verifying)
+                                </Badge>
+                              );
+                            case 'scheduled_overdue':
+                              return (
+                                <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Posting...
+                                </Badge>
+                              );
+                            case 'failed':
+                              return (
+                                <Badge variant="destructive" className="gap-1">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Failed
+                                </Badge>
+                              );
+                            default:
+                              return (
+                                <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Scheduled
+                                </Badge>
+                              );
+                          }
+                        })()}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">

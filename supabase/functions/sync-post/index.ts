@@ -16,6 +16,15 @@ interface SyncPostPayload {
   lastError?: string;
 }
 
+// LinkedIn URL validation regex - matches activity posts
+const LINKEDIN_URL_PATTERN = /linkedin\.com\/(posts|feed).*activity[-:][0-9]{19}/;
+
+// Validate if a LinkedIn URL is a real published post
+function isValidLinkedInUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  return LINKEDIN_URL_PATTERN.test(url);
+}
+
 Deno.serve(async (req) => {
   console.log('=== sync-post called ===');
   console.log('Method:', req.method);
@@ -58,31 +67,8 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Build update data based on status
-    const newStatus = status || 'posted';
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Always set posted_at and linkedin_post_url for posted status
-    if (newStatus === 'posted') {
-      updateData.posted_at = postedAt || new Date().toISOString();
-      // Only set linkedin_post_url if provided (could be null if URL extraction failed)
-      if (linkedinUrl) {
-        updateData.linkedin_post_url = linkedinUrl;
-      }
-    }
-
-    if (newStatus === 'failed') {
-      updateData.last_error = lastError || 'Unknown error';
-      updateData.retry_count = 1;
-    }
-
-    console.log('Update data:', JSON.stringify(updateData));
-
-    // First, try to find the post to confirm it exists
-    let findQuery = supabase.from('posts').select('id, user_id, status');
+    // First, find the post to confirm it exists
+    let findQuery = supabase.from('posts').select('id, user_id, status, linkedin_post_url');
     
     if (postId) {
       findQuery = findQuery.eq('id', postId);
@@ -110,7 +96,52 @@ Deno.serve(async (req) => {
 
     console.log('Found post:', JSON.stringify(existingPost));
 
-    // Now update the post
+    // Determine the new status based on payload
+    const newStatus = status || 'posted';
+    
+    // Check if this is a valid verified LinkedIn URL
+    const hasValidUrl = isValidLinkedInUrl(linkedinUrl);
+    const hadValidUrl = isValidLinkedInUrl(existingPost.linkedin_post_url);
+    
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Handle posted status
+    if (newStatus === 'posted') {
+      // Always set status to posted immediately when extension reports success
+      updateData.status = 'posted';
+      updateData.posted_at = postedAt || new Date().toISOString();
+      
+      // Set verification flags based on URL validity
+      if (hasValidUrl) {
+        updateData.linkedin_post_url = linkedinUrl;
+        updateData.verified = true;
+        console.log('✅ Valid LinkedIn URL detected - marking as verified');
+      } else if (linkedinUrl) {
+        // URL provided but doesn't match pattern - still save it
+        updateData.linkedin_post_url = linkedinUrl;
+        updateData.verified = false;
+        console.log('⚠️ LinkedIn URL provided but not verified pattern');
+      } else {
+        // No URL - posted but verification pending
+        updateData.verified = false;
+        console.log('⏳ No LinkedIn URL - verification pending');
+      }
+    }
+
+    // Handle failed status
+    if (newStatus === 'failed') {
+      updateData.status = 'failed';
+      updateData.last_error = lastError || 'Unknown error';
+      updateData.retry_count = 1;
+      updateData.verified = false;
+    }
+
+    console.log('Update data:', JSON.stringify(updateData));
+
+    // Update the post
     let updateQuery = supabase.from('posts').update(updateData);
 
     if (postId) {
@@ -134,8 +165,10 @@ Deno.serve(async (req) => {
     // Use the userId from the found post if not provided
     const effectiveUserId = userId || existingPost.user_id;
 
-    // Only increment counts and create notification for successful posts
-    if (effectiveUserId && newStatus === 'posted') {
+    // Only increment counts for first-time posted status (not re-verification)
+    const isFirstTimePosted = existingPost.status !== 'posted' && newStatus === 'posted';
+    
+    if (effectiveUserId && isFirstTimePosted) {
       console.log('Incrementing post counts for user:', effectiveUserId);
       
       // Increment daily post count
@@ -146,13 +179,15 @@ Deno.serve(async (req) => {
         console.error('RPC error:', rpcError);
       }
 
-      // Create success notification
+      // Create success notification with appropriate message
+      const notificationMessage = hasValidUrl 
+        ? 'Your LinkedIn post has been published and verified!' 
+        : 'Your LinkedIn post has been published (verification pending).';
+        
       const { error: notifError } = await supabase.from('notifications').insert({
         user_id: effectiveUserId,
-        title: 'Post Published ✅',
-        message: linkedinUrl 
-          ? 'Your LinkedIn post has been published successfully.' 
-          : 'Your LinkedIn post has been published (URL not captured).',
+        title: hasValidUrl ? 'Post Published ✅' : 'Post Published ⏳',
+        message: notificationMessage,
         type: 'post',
       });
       if (notifError) {
@@ -173,6 +208,17 @@ Deno.serve(async (req) => {
           .eq('user_id', effectiveUserId);
       }
     }
+    
+    // If URL was just verified (had no valid URL before, now has one)
+    if (effectiveUserId && !hadValidUrl && hasValidUrl) {
+      console.log('🎉 URL verification upgrade - notifying user');
+      await supabase.from('notifications').insert({
+        user_id: effectiveUserId,
+        title: 'Post Verified ✅',
+        message: 'Your LinkedIn post URL has been confirmed. Analytics syncing is now enabled.',
+        type: 'analytics',
+      });
+    }
 
     // Create failure notification
     if (effectiveUserId && newStatus === 'failed') {
@@ -184,11 +230,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`✅ Post ${postId || trackingId} status updated to: ${newStatus}`);
+    console.log(`✅ Post ${postId || trackingId} status updated to: ${newStatus}, verified: ${hasValidUrl}`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       post: updatedPost,
+      verified: hasValidUrl,
       message: `Post status updated to ${newStatus}`
     }), {
       status: 200,
