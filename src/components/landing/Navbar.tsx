@@ -2,17 +2,25 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Bot, Menu, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const navLinks = [
-    { label: "Features", href: "#features" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "How It Works", href: "#how-it-works" },
+    { label: "Features", href: "/features" },
+    { label: "Pricing", href: "/pricing" },
+    { label: "How It Works", href: "/how-it-works" },
   ];
+
+  const isActive = (path: string) => location.pathname === path;
+
+  const handleNavClick = (href: string) => {
+    navigate(href);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
@@ -32,13 +40,17 @@ const Navbar = () => {
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
+              <button
                 key={link.label}
-                href={link.href}
-                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
+                onClick={() => handleNavClick(link.href)}
+                className={`font-medium transition-colors ${
+                  isActive(link.href) 
+                    ? "text-primary" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
                 {link.label}
-              </a>
+              </button>
             ))}
           </div>
 
@@ -77,14 +89,17 @@ const Navbar = () => {
           >
             <div className="container px-4 py-4 space-y-4">
               {navLinks.map((link) => (
-                <a
+                <button
                   key={link.label}
-                  href={link.href}
-                  className="block text-muted-foreground hover:text-foreground transition-colors font-medium py-2"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => handleNavClick(link.href)}
+                  className={`block w-full text-left py-2 font-medium transition-colors ${
+                    isActive(link.href) 
+                      ? "text-primary" 
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {link.label}
-                </a>
+                </button>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
                 <Button variant="ghost" onClick={() => navigate("/login")}>

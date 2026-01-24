@@ -1,7 +1,15 @@
 import { forwardRef } from "react";
 import { Bot, Linkedin, Twitter, Github } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Footer = forwardRef<HTMLElement>((_, ref) => {
+  const navigate = useNavigate();
+
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    window.scrollTo(0, 0);
+  };
+
   return (
     <footer ref={ref} className="bg-sidebar text-sidebar-foreground py-16">
       <div className="container px-4">
@@ -34,10 +42,26 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
           <div>
             <h4 className="font-semibold mb-4">Product</h4>
             <ul className="space-y-3 text-sm text-sidebar-foreground/70">
-              <li><a href="#features" className="hover:text-sidebar-foreground transition-colors">Features</a></li>
-              <li><a href="#pricing" className="hover:text-sidebar-foreground transition-colors">Pricing</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Chrome Extension</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">API</a></li>
+              <li>
+                <button onClick={() => handleNavClick("/features")} className="hover:text-sidebar-foreground transition-colors">
+                  Features
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/pricing")} className="hover:text-sidebar-foreground transition-colors">
+                  Pricing
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/extension")} className="hover:text-sidebar-foreground transition-colors">
+                  Chrome Extension
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/api")} className="hover:text-sidebar-foreground transition-colors">
+                  API
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -45,10 +69,26 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
           <div>
             <h4 className="font-semibold mb-4">Resources</h4>
             <ul className="space-y-3 text-sm text-sidebar-foreground/70">
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Documentation</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Blog</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Help Center</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Community</a></li>
+              <li>
+                <button onClick={() => handleNavClick("/docs")} className="hover:text-sidebar-foreground transition-colors">
+                  Documentation
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/blog")} className="hover:text-sidebar-foreground transition-colors">
+                  Blog
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/help")} className="hover:text-sidebar-foreground transition-colors">
+                  Help Center
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/community")} className="hover:text-sidebar-foreground transition-colors">
+                  Community
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -56,10 +96,26 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-3 text-sm text-sidebar-foreground/70">
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">Cookie Policy</a></li>
-              <li><a href="#" className="hover:text-sidebar-foreground transition-colors">GDPR</a></li>
+              <li>
+                <button onClick={() => handleNavClick("/privacy")} className="hover:text-sidebar-foreground transition-colors">
+                  Privacy Policy
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/terms")} className="hover:text-sidebar-foreground transition-colors">
+                  Terms of Service
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/cookies")} className="hover:text-sidebar-foreground transition-colors">
+                  Cookie Policy
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavClick("/gdpr")} className="hover:text-sidebar-foreground transition-colors">
+                  GDPR
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -68,9 +124,6 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
         <div className="pt-8 border-t border-sidebar-border flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-sidebar-foreground/60">
             © {new Date().getFullYear()} LinkedBot. All rights reserved.
-          </p>
-          <p className="text-sm text-sidebar-foreground/60">
-            Made with ❤️ for LinkedIn creators
           </p>
         </div>
       </div>

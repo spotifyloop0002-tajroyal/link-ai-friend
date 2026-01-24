@@ -46,11 +46,6 @@ const Onboarding = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [accountType, setAccountType] = useState<"company" | "personal" | null>(null);
   
-  // Shared state
-  const [topics, setTopics] = useState<string[]>([]);
-  const [topicInput, setTopicInput] = useState("");
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  
   // Common fields
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -75,7 +70,6 @@ const Onboarding = () => {
     try {
       const profileData = {
         user_type: accountType,
-        default_topics: topics,
         linkedin_profile_url: linkedinUrl,
         linkedin_profile_url_locked: true, // Lock the URL after save
         phone_number: phoneNumber,
@@ -94,7 +88,6 @@ const Onboarding = () => {
               name: fullName,
               role: profession,
               background,
-              posting_goals: selectedGoals,
             }),
       };
 
@@ -187,10 +180,6 @@ const Onboarding = () => {
                 setCity={setCity}
                 country={country}
                 setCountry={setCountry}
-                topics={topics}
-                setTopics={setTopics}
-                topicInput={topicInput}
-                setTopicInput={setTopicInput}
                 onBack={() => setStep(1)}
                 onNext={handleComplete}
               />
@@ -212,12 +201,6 @@ const Onboarding = () => {
                 setCity={setCity}
                 country={country}
                 setCountry={setCountry}
-                topics={topics}
-                setTopics={setTopics}
-                topicInput={topicInput}
-                setTopicInput={setTopicInput}
-                selectedGoals={selectedGoals}
-                setSelectedGoals={setSelectedGoals}
                 onBack={() => setStep(1)}
                 onNext={handleComplete}
               />

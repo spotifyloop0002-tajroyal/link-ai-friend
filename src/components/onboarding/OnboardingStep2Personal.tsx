@@ -1,18 +1,10 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowLeft, X, Linkedin, AlertCircle } from "lucide-react";
+import { ArrowRight, ArrowLeft, Linkedin, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-const postingGoals = [
-  { id: "thought-leadership", label: "Thought Leadership" },
-  { id: "networking", label: "Networking" },
-  { id: "personal-brand", label: "Build Personal Brand" },
-  { id: "promote-services", label: "Promote Services" },
-];
 
 interface OnboardingStep2PersonalProps {
   fullName: string;
@@ -29,12 +21,6 @@ interface OnboardingStep2PersonalProps {
   setCity: (value: string) => void;
   country: string;
   setCountry: (value: string) => void;
-  topics: string[];
-  setTopics: (topics: string[]) => void;
-  topicInput: string;
-  setTopicInput: (value: string) => void;
-  selectedGoals: string[];
-  setSelectedGoals: (goals: string[]) => void;
   onBack: () => void;
   onNext: () => void;
 }
@@ -54,41 +40,9 @@ export const OnboardingStep2Personal = ({
   setCity,
   country,
   setCountry,
-  topics,
-  setTopics,
-  topicInput,
-  setTopicInput,
-  selectedGoals,
-  setSelectedGoals,
   onBack,
   onNext,
 }: OnboardingStep2PersonalProps) => {
-  const addTopic = () => {
-    if (topicInput.trim() && !topics.includes(topicInput.trim())) {
-      setTopics([...topics, topicInput.trim()]);
-      setTopicInput("");
-    }
-  };
-
-  const removeTopic = (topic: string) => {
-    setTopics(topics.filter((t) => t !== topic));
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addTopic();
-    }
-  };
-
-  const toggleGoal = (goalId: string) => {
-    setSelectedGoals(
-      selectedGoals.includes(goalId)
-        ? selectedGoals.filter((g) => g !== goalId)
-        : [...selectedGoals, goalId]
-    );
-  };
-
   // Validate LinkedIn URL format
   const isValidLinkedInUrl = (url: string) => {
     if (!url) return false;
@@ -96,7 +50,15 @@ export const OnboardingStep2Personal = ({
     return pattern.test(url.trim());
   };
 
-  const canProceed = fullName && profession && background && isValidLinkedInUrl(linkedinUrl);
+  // All fields are now required
+  const canProceed = 
+    fullName.trim() && 
+    profession.trim() && 
+    background.trim() && 
+    phoneNumber.trim() &&
+    city.trim() &&
+    country.trim() &&
+    isValidLinkedInUrl(linkedinUrl);
 
   return (
     <motion.div
@@ -116,7 +78,11 @@ export const OnboardingStep2Personal = ({
             onChange={(e) => setFullName(e.target.value)}
             placeholder="e.g., John Doe"
             className="mt-1.5"
+            required
           />
+          {!fullName.trim() && (
+            <p className="text-xs text-destructive mt-1">Name is required</p>
+          )}
         </div>
 
         {/* LinkedIn Profile URL - CRITICAL FIELD */}
@@ -131,12 +97,16 @@ export const OnboardingStep2Personal = ({
             onChange={(e) => setLinkedinUrl(e.target.value)}
             placeholder="https://linkedin.com/in/your-profile"
             className="mt-1.5"
+            required
           />
           {linkedinUrl && !isValidLinkedInUrl(linkedinUrl) && (
             <p className="text-xs text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
               Please enter a valid LinkedIn profile URL (e.g., https://linkedin.com/in/username)
             </p>
+          )}
+          {!linkedinUrl && (
+            <p className="text-xs text-destructive mt-1">LinkedIn URL is required</p>
           )}
           <Alert className="mt-2 border-warning/50 bg-warning/10">
             <AlertCircle className="w-4 h-4 text-warning" />
@@ -148,36 +118,48 @@ export const OnboardingStep2Personal = ({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="phoneNumber">Phone Number</Label>
+            <Label htmlFor="phoneNumber">Phone Number *</Label>
             <Input
               id="phoneNumber"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="+91 9876543210"
               className="mt-1.5"
+              required
             />
+            {!phoneNumber.trim() && (
+              <p className="text-xs text-destructive mt-1">Phone is required</p>
+            )}
           </div>
           <div>
-            <Label htmlFor="city">City</Label>
+            <Label htmlFor="city">City *</Label>
             <Input
               id="city"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="e.g., Mumbai"
               className="mt-1.5"
+              required
             />
+            {!city.trim() && (
+              <p className="text-xs text-destructive mt-1">City is required</p>
+            )}
           </div>
         </div>
 
         <div>
-          <Label htmlFor="country">Country</Label>
+          <Label htmlFor="country">Country *</Label>
           <Input
             id="country"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
             placeholder="e.g., India"
             className="mt-1.5"
+            required
           />
+          {!country.trim() && (
+            <p className="text-xs text-destructive mt-1">Country is required</p>
+          )}
         </div>
 
         <div>
@@ -188,7 +170,11 @@ export const OnboardingStep2Personal = ({
             onChange={(e) => setProfession(e.target.value)}
             placeholder="e.g., Marketing Director"
             className="mt-1.5"
+            required
           />
+          {!profession.trim() && (
+            <p className="text-xs text-destructive mt-1">Role/Profession is required</p>
+          )}
         </div>
 
         <div>
@@ -200,61 +186,14 @@ export const OnboardingStep2Personal = ({
             placeholder="Tell us about your experience and expertise..."
             maxLength={200}
             className="mt-1.5 min-h-[100px]"
+            required
           />
           <p className="text-xs text-muted-foreground mt-1">
             {background.length}/200 characters
           </p>
-        </div>
-
-        <div>
-          <Label>Topics You Want to Post About</Label>
-          <div className="flex gap-2 mt-1.5">
-            <Input
-              value={topicInput}
-              onChange={(e) => setTopicInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Add a topic and press Enter"
-            />
-            <Button variant="outline" onClick={addTopic}>
-              Add
-            </Button>
-          </div>
-          {topics.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {topics.map((topic) => (
-                <span
-                  key={topic}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm"
-                >
-                  {topic}
-                  <button
-                    onClick={() => removeTopic(topic)}
-                    className="hover:bg-primary/20 rounded-full p-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
+          {!background.trim() && (
+            <p className="text-xs text-destructive mt-1">Background is required</p>
           )}
-        </div>
-
-        <div>
-          <Label>Posting Goals</Label>
-          <div className="grid sm:grid-cols-2 gap-3 mt-2">
-            {postingGoals.map((goal) => (
-              <label
-                key={goal.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
-              >
-                <Checkbox
-                  checked={selectedGoals.includes(goal.id)}
-                  onCheckedChange={() => toggleGoal(goal.id)}
-                />
-                <span className="text-sm">{goal.label}</span>
-              </label>
-            ))}
-          </div>
         </div>
       </div>
 

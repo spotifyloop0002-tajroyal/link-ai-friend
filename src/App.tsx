@@ -23,6 +23,19 @@ import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminSettings from "./pages/admin/AdminSettings";
 import NotFound from "./pages/NotFound";
+import FeaturesPage from "./pages/FeaturesPage";
+import HowItWorks from "./pages/HowItWorks";
+import PricingPage from "./pages/PricingPage";
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
+import TermsOfService from "./pages/legal/TermsOfService";
+import CookiePolicy from "./pages/legal/CookiePolicy";
+import GDPR from "./pages/legal/GDPR";
+import Documentation from "./pages/resources/Documentation";
+import Blog from "./pages/resources/Blog";
+import HelpCenter from "./pages/resources/HelpCenter";
+import Community from "./pages/resources/Community";
+import ChromeExtension from "./pages/product/ChromeExtension";
+import API from "./pages/product/API";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +68,23 @@ const AppContent = () => {
           <Route path="/admin/notifications" element={<AdminNotifications />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
+          {/* Public pages */}
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          {/* Legal pages */}
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/cookies" element={<CookiePolicy />} />
+          <Route path="/gdpr" element={<GDPR />} />
+          {/* Resource pages */}
+          <Route path="/docs" element={<Documentation />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/community" element={<Community />} />
+          {/* Product pages */}
+          <Route path="/extension" element={<ChromeExtension />} />
+          <Route path="/api" element={<API />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
