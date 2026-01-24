@@ -23,10 +23,23 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
+  ThumbsUp,
+  MessageSquare,
+  Share2,
+  BarChart3,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+
+interface PostAnalytics {
+  views?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  updatedAt?: string;
+}
 
 interface ScheduledPost {
   id: string;
@@ -36,6 +49,12 @@ interface ScheduledPost {
   posted_at?: string;
   linkedin_post_url?: string;
   verified?: boolean;
+  tracking_id?: string;
+  views_count?: number;
+  likes_count?: number;
+  comments_count?: number;
+  shares_count?: number;
+  last_synced_at?: string;
 }
 
 // LinkedIn URL validation pattern
@@ -85,7 +104,7 @@ const DashboardPage = () => {
 
       const { data, error } = await supabase
         .from("posts")
-        .select("id, content, scheduled_time, status, posted_at, linkedin_post_url")
+        .select("id, content, scheduled_time, status, posted_at, linkedin_post_url, verified, tracking_id, views_count, likes_count, comments_count, shares_count, last_synced_at")
         .eq("user_id", user.id)
         .in("status", ["scheduled", "posted", "failed"])
         .order("scheduled_time", { ascending: true })
@@ -98,6 +117,24 @@ const DashboardPage = () => {
     } finally {
       setPostsLoading(false);
     }
+  }, []);
+
+  // Update post analytics in real-time from extension events
+  const updatePostAnalytics = useCallback((trackingId: string, analytics: PostAnalytics) => {
+    setScheduledPosts(prev => 
+      prev.map(post => 
+        post.tracking_id === trackingId 
+          ? { 
+              ...post, 
+              views_count: analytics.views ?? post.views_count,
+              likes_count: analytics.likes ?? post.likes_count,
+              comments_count: analytics.comments ?? post.comments_count,
+              shares_count: analytics.shares ?? post.shares_count,
+              last_synced_at: analytics.updatedAt ?? new Date().toISOString(),
+            }
+          : post
+      )
+    );
   }, []);
 
   // Initial fetch
@@ -167,26 +204,57 @@ const DashboardPage = () => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [fetchPosts]);
 
-  // Listen for extension events
+  // Listen for extension events via window.postMessage
   useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      // Only accept messages from our extension
+      if (event.data?.action !== 'extensionEvent') return;
+      
+      console.log('📡 Extension event received:', event.data);
+      
+      if (event.data.event === 'analyticsUpdated') {
+        const { trackingId, analytics } = event.data.data || {};
+        if (trackingId && analytics) {
+          updatePostAnalytics(trackingId, analytics);
+          toast.success('Analytics updated!', {
+            description: `Views: ${analytics.views || 0}, Likes: ${analytics.likes || 0}`,
+          });
+        }
+      }
+      
+      if (event.data.event === 'postPublished') {
+        console.log('✅ Post published via extension:', event.data.data);
+        fetchPosts(); // Refetch to get latest status
+        toast.success('Post published successfully!');
+      }
+    };
+
+    // Also listen for custom DOM events from bridge
     const handlePostPublished = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('✅ Post published:', customEvent.detail);
+      console.log('✅ Post published (bridge):', customEvent.detail);
+      fetchPosts();
     };
 
-    const handleAnalytics = (event: Event) => {
+    const handleAnalyticsUpdated = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('📊 Analytics scraped:', customEvent.detail);
+      console.log('📊 Analytics updated (bridge):', customEvent.detail);
+      const { trackingId, analytics, postId } = customEvent.detail || {};
+      if (trackingId || postId) {
+        updatePostAnalytics(trackingId || postId, analytics || customEvent.detail);
+      }
     };
 
-    window.addEventListener('linkedbot-post-published', handlePostPublished);
-    window.addEventListener('linkedbot-analytics-scraped', handleAnalytics);
+    window.addEventListener('message', handleExtensionMessage);
+    window.addEventListener('linkedbot:post-published', handlePostPublished);
+    window.addEventListener('linkedbot:analytics-updated', handleAnalyticsUpdated);
 
     return () => {
-      window.removeEventListener('linkedbot-post-published', handlePostPublished);
-      window.removeEventListener('linkedbot-analytics-scraped', handleAnalytics);
+      window.removeEventListener('message', handleExtensionMessage);
+      window.removeEventListener('linkedbot:post-published', handlePostPublished);
+      window.removeEventListener('linkedbot:analytics-updated', handleAnalyticsUpdated);
     };
-  }, []);
+  }, [fetchPosts, updatePostAnalytics]);
 
   // Calculate real stats - dynamic agent count
   const totalViews = analyticsPosts.reduce((sum, p) => sum + (p.views || 0), 0);
@@ -325,14 +393,40 @@ const DashboardPage = () => {
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Post Preview</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Scheduled</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Analytics</th>
                     <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scheduledPosts.map((post) => (
-                    <tr key={post.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                    <tr 
+                      key={post.id} 
+                      data-tracking-id={post.tracking_id}
+                      className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                    >
                       <td className="p-4">
-                        <p className="text-sm line-clamp-1 max-w-xs">{post.content}</p>
+                        <div className="space-y-1">
+                          <p className="text-sm line-clamp-1 max-w-xs">{post.content}</p>
+                          {/* URL Status Indicator */}
+                          <div className="post-url-status">
+                            {post.linkedin_post_url ? (
+                              <a 
+                                href={post.linkedin_post_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-primary hover:underline text-xs flex items-center gap-1"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                View on LinkedIn
+                              </a>
+                            ) : post.status === 'posted' ? (
+                              <span className="text-muted-foreground text-xs flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                URL pending...
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2 text-sm">
@@ -388,6 +482,48 @@ const DashboardPage = () => {
                               );
                           }
                         })()}
+                      </td>
+                      {/* Analytics Column */}
+                      <td className="p-4">
+                        {post.status === 'posted' || post.status === 'published' ? (
+                          <div className="space-y-1">
+                            {/* Analytics Stats */}
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="views-count flex items-center gap-1 text-muted-foreground">
+                                <Eye className="w-3 h-3" />
+                                {post.views_count || 0}
+                              </span>
+                              <span className="likes-count flex items-center gap-1 text-muted-foreground">
+                                <ThumbsUp className="w-3 h-3" />
+                                {post.likes_count || 0}
+                              </span>
+                              <span className="comments-count flex items-center gap-1 text-muted-foreground">
+                                <MessageSquare className="w-3 h-3" />
+                                {post.comments_count || 0}
+                              </span>
+                              <span className="shares-count flex items-center gap-1 text-muted-foreground">
+                                <Share2 className="w-3 h-3" />
+                                {post.shares_count || 0}
+                              </span>
+                            </div>
+                            {/* Analytics Tracking Status */}
+                            <div className="analytics-status last-updated">
+                              {post.last_synced_at ? (
+                                <span className="text-success text-xs flex items-center gap-1">
+                                  <BarChart3 className="w-3 h-3" />
+                                  Synced {formatDistanceToNow(new Date(post.last_synced_at))} ago
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-xs flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Waiting for analytics...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
