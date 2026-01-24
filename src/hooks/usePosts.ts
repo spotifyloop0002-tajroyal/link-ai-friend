@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -72,6 +72,62 @@ export const usePosts = () => {
       setIsLoading(false);
     }
   }, []);
+
+  // Set up realtime subscription for post status updates
+  useEffect(() => {
+    const setupRealtimeSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const channel = supabase
+        .channel('posts-status-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'posts',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('Post updated via realtime:', payload.new);
+            // Update local state with the new post data
+            setPosts(prev => 
+              prev.map(post => 
+                post.id === payload.new.id 
+                  ? { ...post, ...payload.new as Post }
+                  : post
+              )
+            );
+            
+            // Show toast if post was just published
+            if (payload.new.status === 'posted' && payload.old?.status !== 'posted') {
+              toast({
+                title: "Post Published ✅",
+                description: "Your LinkedIn post has been published successfully!",
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    setupRealtimeSubscription();
+  }, [toast]);
+
+  // Polling fallback: refetch on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchPosts();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchPosts]);
 
   const fetchScheduledPosts = useCallback(async () => {
     return fetchPosts({ status: "scheduled" });
