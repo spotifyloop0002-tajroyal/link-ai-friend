@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useSubscription, PLAN_LIMITS } from "@/hooks/useSubscription";
+import { usePayment, PLAN_PRICING } from "@/hooks/usePayment";
 import { 
   CreditCard, 
   Check, 
@@ -18,8 +19,11 @@ import {
   BarChart3,
   Bot,
   Loader2,
+  X,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 const planIcons = {
   free: Zap,
@@ -34,20 +38,62 @@ const planColors = {
 };
 
 const BillingPage = () => {
-  const { status, isLoading, applyCoupon } = useSubscription();
+  const { status, isLoading: subscriptionLoading, fetchSubscriptionStatus } = useSubscription();
+  const { 
+    isLoading: paymentLoading, 
+    couponValidation, 
+    validateCoupon, 
+    clearCoupon, 
+    createPayment,
+    calculateFinalPrice,
+  } = usePayment();
+
   const [couponCode, setCouponCode] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<"pro" | "business" | null>(null);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
     
     setIsApplyingCoupon(true);
-    await applyCoupon(couponCode);
-    setCouponCode("");
+    const result = await validateCoupon(couponCode);
     setIsApplyingCoupon(false);
+    
+    if (result.valid) {
+      toast.success("Coupon applied successfully!");
+    } else {
+      toast.error(result.error || "Invalid coupon code");
+    }
   };
 
-  if (isLoading) {
+  const handleRemoveCoupon = () => {
+    clearCoupon();
+    setCouponCode("");
+    toast.info("Coupon removed");
+  };
+
+  const handleUpgrade = async (plan: "pro" | "business") => {
+    setSelectedPlan(plan);
+    
+    const result = await createPayment(
+      plan,
+      couponValidation?.valid ? couponValidation.code : undefined,
+      async () => {
+        await fetchSubscriptionStatus();
+        setSelectedPlan(null);
+        clearCoupon();
+        setCouponCode("");
+      }
+    );
+
+    if (!result.success && result.error !== "Payment cancelled") {
+      toast.error(result.error || "Payment failed");
+    }
+    
+    setSelectedPlan(null);
+  };
+
+  if (subscriptionLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -102,9 +148,6 @@ const BillingPage = () => {
                     </CardDescription>
                   </div>
                 </div>
-                {status?.plan === "free" && (
-                  <Button variant="gradient">Upgrade Plan</Button>
-                )}
               </div>
             </CardHeader>
           </Card>
@@ -196,32 +239,57 @@ const BillingPage = () => {
                 Apply Coupon Code
               </CardTitle>
               <CardDescription>
-                Have a coupon code? Enter it below to apply a discount or upgrade your plan.
+                Have a coupon code? Enter it below to get a discount on your subscription.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-3">
-                <Input
-                  placeholder="Enter coupon code (e.g., FREE2026)"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  className="max-w-sm"
-                />
-                <Button 
-                  onClick={handleApplyCoupon}
-                  disabled={!couponCode.trim() || isApplyingCoupon}
-                >
-                  {isApplyingCoupon ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Apply
-                </Button>
+              <div className="flex gap-3 items-start">
+                <div className="flex-1 space-y-2">
+                  <div className="flex gap-3">
+                    <Input
+                      placeholder="Enter coupon code"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      className="max-w-sm"
+                      disabled={!!couponValidation?.valid}
+                    />
+                    {couponValidation?.valid ? (
+                      <Button variant="outline" onClick={handleRemoveCoupon}>
+                        <X className="w-4 h-4 mr-2" />
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={handleApplyCoupon}
+                        disabled={!couponCode.trim() || isApplyingCoupon}
+                      >
+                        {isApplyingCoupon ? (
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : null}
+                        Apply
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {couponValidation?.valid && (
+                    <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950/30 px-3 py-2 rounded-lg">
+                      <Check className="w-4 h-4" />
+                      <span>
+                        Coupon <strong>{couponValidation.code}</strong> applied! 
+                        {couponValidation.type === "percentage" 
+                          ? ` ${couponValidation.value}% off`
+                          : ` ₹${couponValidation.value} off`
+                        }
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Plan Comparison */}
+        {/* Pricing Plans */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -229,8 +297,8 @@ const BillingPage = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Compare Plans</CardTitle>
-              <CardDescription>Choose the right plan for your needs</CardDescription>
+              <CardTitle>Choose Your Plan</CardTitle>
+              <CardDescription>Select the plan that best fits your needs</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-6">
@@ -238,45 +306,124 @@ const BillingPage = () => {
                   const limits = PLAN_LIMITS[plan];
                   const Icon = planIcons[plan];
                   const isCurrentPlan = status?.plan === plan;
+                  const pricing = plan !== "free" ? calculateFinalPrice(plan, couponValidation) : null;
+                  const isProcessing = selectedPlan === plan && paymentLoading;
                   
                   return (
-                    <div 
+                    <motion.div 
                       key={plan}
-                      className={`p-4 rounded-xl border ${isCurrentPlan ? "border-primary bg-primary/5" : "border-border"}`}
+                      whileHover={plan !== "free" && !isCurrentPlan ? { scale: 1.02 } : {}}
+                      className={`p-6 rounded-xl border-2 transition-all ${
+                        isCurrentPlan 
+                          ? "border-primary bg-primary/5" 
+                          : plan === "pro"
+                            ? "border-primary/50 bg-gradient-to-b from-primary/5 to-transparent"
+                            : "border-border hover:border-primary/30"
+                      }`}
                     >
-                      <div className="flex items-center gap-2 mb-3">
-                        <Icon className={`w-5 h-5 ${plan === "free" ? "text-muted-foreground" : "text-primary"}`} />
-                        <span className="font-semibold capitalize">{plan}</span>
-                        {isCurrentPlan && (
-                          <Badge variant="outline" className="ml-auto text-xs">Current</Badge>
-                        )}
+                      {/* Plan Header */}
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          plan === "free" ? "bg-muted" : "gradient-bg"
+                        }`}>
+                          <Icon className={`w-5 h-5 ${plan === "free" ? "text-muted-foreground" : "text-primary-foreground"}`} />
+                        </div>
+                        <div>
+                          <span className="font-bold capitalize text-lg">{plan}</span>
+                          {plan === "pro" && (
+                            <Badge variant="secondary" className="ml-2 text-xs">Popular</Badge>
+                          )}
+                        </div>
                       </div>
-                      <ul className="space-y-2 text-sm">
+
+                      {/* Pricing */}
+                      <div className="mb-4">
+                        {plan === "free" ? (
+                          <div className="text-2xl font-bold">Free</div>
+                        ) : pricing ? (
+                          <div className="space-y-1">
+                            {pricing.discount > 0 ? (
+                              <>
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-2xl font-bold text-primary">
+                                    ₹{pricing.final}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground line-through">
+                                    ₹{pricing.original}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">/month</span>
+                                </div>
+                                <div className="text-xs text-green-600 flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  You save ₹{pricing.discount}!
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-2xl font-bold">₹{pricing.original}</span>
+                                <span className="text-sm text-muted-foreground">/month</span>
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                              (${PLAN_PRICING[plan].usd} USD)
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {/* Features */}
+                      <ul className="space-y-2 text-sm mb-6">
                         <li className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-success" />
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                           {limits.agents === -1 ? "Unlimited" : limits.agents} Agent{limits.agents !== 1 ? "s" : ""}
                         </li>
                         <li className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-success" />
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                           {limits.postsPerMonth} posts/month
                         </li>
                         <li className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-success" />
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                           {limits.postsPerDay} posts/day
                         </li>
                         {limits.aiImageGeneration && (
                           <li className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-success" />
+                            <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                             AI Image Generation
                           </li>
                         )}
+                        {limits.smartScheduling && (
+                          <li className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            Smart Scheduling
+                          </li>
+                        )}
                       </ul>
-                      {!isCurrentPlan && plan !== "free" && (
-                        <Button variant="outline" className="w-full mt-4" size="sm">
-                          Upgrade to {plan.charAt(0).toUpperCase() + plan.slice(1)}
+
+                      {/* Action Button */}
+                      {isCurrentPlan ? (
+                        <Badge variant="outline" className="w-full justify-center py-2">
+                          Current Plan
+                        </Badge>
+                      ) : plan !== "free" ? (
+                        <Button 
+                          className="w-full"
+                          variant={plan === "pro" ? "gradient" : "secondary"}
+                          onClick={() => handleUpgrade(plan)}
+                          disabled={paymentLoading}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Processing...
+                            </>
+                          ) : pricing?.final === 0 ? (
+                            "Activate Free"
+                          ) : (
+                            `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`
+                          )}
                         </Button>
-                      )}
-                    </div>
+                      ) : null}
+                    </motion.div>
                   );
                 })}
               </div>
@@ -284,30 +431,28 @@ const BillingPage = () => {
           </Card>
         </motion.div>
 
-        {/* Payment Method */}
+        {/* Payment Security */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-primary" />
-                Payment Method
-              </CardTitle>
-              <CardDescription>
-                {status?.plan === "free" 
-                  ? "Add a payment method to upgrade your plan"
-                  : "Manage your payment methods"
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline">
-                <CreditCard className="w-4 h-4 mr-2" />
-                Add Payment Method
-              </Button>
+            <CardContent className="py-4">
+              <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4" />
+                  <span>Secure Payment via Razorpay</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>256-bit SSL Encryption</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Cancel Anytime</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

@@ -22,6 +22,8 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminCoupons from "./pages/admin/AdminCoupons";
+import AdminPayments from "./pages/admin/AdminPayments";
 import NotFound from "./pages/NotFound";
 import FeaturesPage from "./pages/FeaturesPage";
 import HowItWorks from "./pages/HowItWorks";
@@ -67,6 +69,8 @@ const AppContent = () => {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/notifications" element={<AdminNotifications />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
+          <Route path="/admin/coupons" element={<AdminCoupons />} />
+          <Route path="/admin/payments" element={<AdminPayments />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           {/* Public pages */}
           <Route path="/features" element={<FeaturesPage />} />

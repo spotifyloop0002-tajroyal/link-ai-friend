@@ -13,6 +13,8 @@ import {
   ChevronDown,
   LayoutDashboard,
   ArrowLeft,
+  Tag,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -35,6 +37,8 @@ const adminNavItems = [
   { icon: Users, label: "Users", path: "/admin/users" },
   { icon: Bell, label: "Notifications", path: "/admin/notifications" },
   { icon: BarChart3, label: "Analytics", path: "/admin/analytics" },
+  { icon: Tag, label: "Coupons", path: "/admin/coupons" },
+  { icon: CreditCard, label: "Payments", path: "/admin/payments" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 

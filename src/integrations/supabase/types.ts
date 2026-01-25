@@ -59,6 +59,54 @@ export type Database = {
         }
         Relationships: []
       }
+      coupons: {
+        Row: {
+          code: string
+          created_at: string
+          current_uses: number
+          duration_days: number
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          plan: string | null
+          type: string
+          updated_at: string
+          valid_from: string | null
+          valid_until: string | null
+          value: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          current_uses?: number
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan?: string | null
+          type?: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          value?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          current_uses?: number
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan?: string | null
+          type?: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
       linkedin_analytics: {
         Row: {
           connections_count: number | null
@@ -169,6 +217,74 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          coupon_code: string | null
+          coupon_id: string | null
+          created_at: string
+          currency: string
+          discount_amount: number | null
+          error_message: string | null
+          final_amount: number
+          id: string
+          payment_method: string | null
+          plan: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          coupon_code?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          currency?: string
+          discount_amount?: number | null
+          error_message?: string | null
+          final_amount: number
+          id?: string
+          payment_method?: string | null
+          plan: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          coupon_code?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          currency?: string
+          discount_amount?: number | null
+          error_message?: string | null
+          final_amount?: number
+          id?: string
+          payment_method?: string | null
+          plan?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_analytics: {
         Row: {
