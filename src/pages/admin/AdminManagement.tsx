@@ -241,9 +241,14 @@ const AdminManagement = () => {
       await loadAdmins();
     } catch (error: any) {
       console.error("Error creating admin:", error);
+      // Provide specific error messages for common issues
+      let errorMessage = error.message || "Failed to create admin user";
+      if (error.message?.includes("already been registered") || error.code === "email_exists") {
+        errorMessage = "A user with this email already exists. Try adding them as admin using their existing account.";
+      }
       toast({
         title: "Error",
-        description: error.message || "Failed to create admin user",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
