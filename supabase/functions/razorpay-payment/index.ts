@@ -128,10 +128,18 @@ serve(async (req) => {
 
         // Increment coupon usage
         if (couponId) {
-          await supabase
+          const { data: couponData } = await supabase
             .from("coupons")
-            .update({ current_uses: supabase.rpc("increment", { x: 1 }) })
-            .eq("id", couponId);
+            .select("current_uses")
+            .eq("id", couponId)
+            .single();
+          
+          if (couponData) {
+            await supabase
+              .from("coupons")
+              .update({ current_uses: (couponData.current_uses || 0) + 1 })
+              .eq("id", couponId);
+          }
         }
 
         return new Response(
@@ -293,7 +301,18 @@ serve(async (req) => {
 
       // Increment coupon usage if used
       if (payment.coupon_id) {
-        await supabase.rpc("increment_coupon_usage", { coupon_uuid: payment.coupon_id });
+        const { data: couponData } = await supabase
+          .from("coupons")
+          .select("current_uses")
+          .eq("id", payment.coupon_id)
+          .single();
+        
+        if (couponData) {
+          await supabase
+            .from("coupons")
+            .update({ current_uses: (couponData.current_uses || 0) + 1 })
+            .eq("id", payment.coupon_id);
+        }
       }
 
       return new Response(

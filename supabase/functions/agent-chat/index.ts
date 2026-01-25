@@ -299,6 +299,21 @@ ${exampleTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 CRITICAL BEHAVIOR RULES
 ═══════════════════════════════════════════
 
+🚨 GOLDEN RULE - NO FAKE CONFIRMATIONS 🚨
+NEVER SAY:
+- "I've scheduled your post"
+- "Your post is posted"
+- "It will be posted at X time"
+- "Done! Your post is live"
+- "Successfully scheduled"
+
+UNLESS: Backend or Chrome Extension returns SUCCESS confirmation.
+
+INSTEAD SAY:
+- "Sending to extension..." (when initiating)
+- "Click the Post Now button to publish"
+- "Waiting for confirmation..."
+
 1. **PERSONALIZATION IS MANDATORY**:
    - ALL topics must relate to the user's role, company, and industry
    - Write as if the USER wrote this, not a generic AI
@@ -324,13 +339,26 @@ CRITICAL BEHAVIOR RULES
    - Vary posting times between 9am-6pm IST
    - Max 2 posts per day
 
-4. **NO HALLUCINATIONS**:
+4. **APPROVAL GATE - MANDATORY**:
+   Before ANY scheduling action, you MUST:
+   1. Show the draft post
+   2. Ask: "Do you approve this post for scheduling?"
+   3. Wait for explicit approval (yes, ok, approve, go ahead, looks good)
+   4. ONLY THEN proceed with scheduling request
+
+5. **TIME VALIDATION - MANDATORY**:
+   - Time MUST be in the future (IST timezone)
+   - If user gives multiple times ("2pm or 3pm") → ASK to choose ONE
+   - If time already passed → REJECT and ask for new time
+   - Never silently accept invalid times
+
+6. **NO HALLUCINATIONS**:
    - NEVER invent fake metrics or achievements
    - NEVER pretend events that didn't happen
    - If data is unavailable, use neutral framing
    - Say "Based on industry trends..." not "Based on your 500% growth..."
 
-5. **POST FORMAT - ONLY FOR ACTUAL LINKEDIN POSTS**:
+7. **POST FORMAT - ONLY FOR ACTUAL LINKEDIN POSTS**:
    ONLY use --- markers when you are creating an ACTUAL LinkedIn post for the user.
    ---
    [LinkedIn post content here]
@@ -343,14 +371,13 @@ CRITICAL BEHAVIOR RULES
    - Image prompts or instructions
    - Any other non-post content
 
-6. **IMAGE GENERATION - IMPORTANT**:
+8. **IMAGE GENERATION - IMPORTANT**:
+   - Ask: "Do you want to add an image?" before generating
+   - NEVER assume the user wants an image
    - The system generates images automatically when requested
    - NEVER output JSON like {"action": "dalle.text2im"...}
-   - NEVER pretend to be a tool or API
-   - If user asks for an image, just say "I'll generate an image for your post"
-   - The backend handles image generation - you just write posts
 
-7. **WHEN USER SAYS "generate image"**:
+9. **WHEN USER SAYS "generate image"**:
    - If they just created a post, respond: "Generating an AI image for your post... 🎨"
    - DO NOT output any JSON, code blocks, or tool calls
    - The image will be generated automatically by the system
@@ -988,13 +1015,18 @@ serve(async (req) => {
 
     switch (intent.type) {
       case "greeting": {
-        response = `Hello! 👋 I'm your LinkedIn posting assistant.
+        const profile = userContext?.context?.profile || userContext?.agentContext?.profile || {};
+        const userName = profile.name ? profile.name.split(' ')[0] : '';
+        
+        response = `Hello${userName ? ` ${userName}` : ''}! 👋 I'm your LinkedIn posting assistant.
 
-I can help you:
-1. **Create posts** - Say "write a post about [topic]"
-2. **Research topics** - I'll find the latest insights for your posts
-3. **Schedule posts** - Say "post it tomorrow at 2pm"
-4. **Batch create** - Say "create posts for next 5 days"
+Here's what I can do:
+• **Create posts** - Say "write a post about [topic]"
+• **Research topics** - I'll find the latest insights
+• **Schedule posts** - Say "schedule it for tomorrow at 2pm"
+• **Batch create** - Say "create posts for next 5 days"
+
+**My Promise:** I will NEVER say "scheduled" or "posted" until I've confirmed the action actually succeeded. I'll always ask for your approval before taking any action.
 
 What would you like to create today?`;
         break;
@@ -1152,7 +1184,8 @@ Or would you prefer different topics/timing?`;
         if (!generatedPosts || generatedPosts.length === 0) {
           response = "I don't have any posts ready to publish. Would you like me to create one first?\n\nJust say 'write a post about [topic]' 📝";
         } else {
-          response = "Got it! Posting to LinkedIn now... 🚀\n\nClick the **Post Now** button in the Generated Posts panel to confirm.";
+          // CRITICAL: Never claim "posting" - only guide user to the action
+          response = `📋 **Ready to Post**\n\nYour post is ready. To publish it:\n\n1. Click the **"Post Now"** button in the Generated Posts panel\n2. Wait for the Chrome extension to confirm\n3. I'll update you once LinkedIn confirms the post is live\n\n⚠️ **Note:** I cannot post directly - the extension handles the actual publishing.`;
           action = "post_now";
         }
         break;
@@ -1169,8 +1202,19 @@ Or would you prefer different topics/timing?`;
           const parsedTime = parseScheduleTimeIST(timeText);
           
           if (parsedTime) {
+            const scheduledDate = new Date(parsedTime);
+            const now = new Date();
+            
+            // Validate time is in the future
+            if (scheduledDate <= now) {
+              response = `⚠️ That time (${formatScheduledTimeIST(parsedTime)}) has already passed.\n\nPlease provide a future time like:\n• "today at 5pm"\n• "tomorrow at 9am"\n• "next Monday at 2pm"`;
+              break;
+            }
+            
             const postToSchedule = generatedPosts[0];
-            response = `Got it! Scheduling your post for ${formatScheduledTimeIST(parsedTime)}... 🚀\n\nSending to extension now!`;
+            
+            // CRITICAL: Use "sending" language, NOT "scheduled" until extension confirms
+            response = `📅 **Scheduling Request**\n\nTime: **${formatScheduledTimeIST(parsedTime)}**\n\n✅ Sending to Chrome extension now...\n\n⚠️ **Important:** The post will be marked as "scheduled" only after the extension confirms receipt. I'll update you on the status.`;
             action = "auto_schedule";
             
             // Return with parsed time and post data
@@ -1186,7 +1230,7 @@ Or would you prefer different topics/timing?`;
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           } else {
-            response = `I couldn't parse that time. Try saying "today at 3:30 PM" or "tomorrow morning".\n\nOr click the **Post Now** button to publish immediately.`;
+            response = `I couldn't understand that time. Please be specific:\n\n✓ "today at 3:30 PM"\n✓ "tomorrow at 9 AM"\n✓ "post it at 2pm"\n\n❌ Avoid: "sometime later", "in a bit", "2 or 3 pm"`;
           }
         }
         break;
