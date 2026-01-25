@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +20,9 @@ import {
   Bell,
   Lock,
   RefreshCw,
+  UserPlus,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const AdminSettings = () => {
@@ -34,6 +36,11 @@ const AdminSettings = () => {
     posts: 0,
     notifications: 0,
   });
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -58,6 +65,12 @@ const AdminSettings = () => {
 
         if (data === true) {
           await fetchDbStats();
+          
+          // Check if super admin
+          const { data: superAdminData } = await supabase.rpc('is_super_admin', {
+            _user_id: user.id
+          });
+          setIsSuperAdmin(superAdminData === true);
         }
       } catch (err) {
         setIsAdmin(false);
@@ -89,6 +102,48 @@ const AdminSettings = () => {
     toast({ title: "Refreshing stats..." });
     await fetchDbStats();
     toast({ title: "Stats refreshed!" });
+  };
+
+  const handleCreateAdmin = async () => {
+    if (!newAdminEmail || !newAdminPassword) {
+      toast({ title: "Please enter email and password", variant: "destructive" });
+      return;
+    }
+
+    if (newAdminPassword.length < 6) {
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+
+    setIsCreatingAdmin(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('create-admin-user', {
+        body: { email: newAdminEmail, password: newAdminPassword },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || "Failed to create admin");
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({ title: "Admin user created successfully!" });
+      setNewAdminEmail("");
+      setNewAdminPassword("");
+      await fetchDbStats();
+    } catch (error: any) {
+      toast({ 
+        title: "Failed to create admin", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    } finally {
+      setIsCreatingAdmin(false);
+    }
   };
 
   if (isLoading) {
@@ -222,11 +277,80 @@ const AdminSettings = () => {
           </Card>
         </motion.div>
 
+        {/* Create Admin - Only for Super Admins */}
+        {isSuperAdmin && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5" />
+                  Create Admin User
+                </CardTitle>
+                <CardDescription>Add a new admin with email and password</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-email">Email</Label>
+                  <Input
+                    id="admin-email"
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={newAdminEmail}
+                    onChange={(e) => setNewAdminEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="admin-password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="admin-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Min 6 characters"
+                      value={newAdminPassword}
+                      onChange={(e) => setNewAdminPassword(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleCreateAdmin} 
+                  disabled={isCreatingAdmin}
+                  className="w-full"
+                >
+                  {isCreatingAdmin ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create Admin
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Security Settings */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
         >
           <Card>
             <CardHeader>
