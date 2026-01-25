@@ -95,10 +95,9 @@ const AdminPage = () => {
           return;
         }
 
-        // Check admin role using the has_role function
-        const { data, error } = await supabase.rpc('has_role', {
-          _user_id: user.id,
-          _role: 'admin'
+        // Check admin role using the is_admin function (includes super_admin)
+        const { data, error } = await supabase.rpc('is_admin', {
+          _user_id: user.id
         });
 
         if (error) {
