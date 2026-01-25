@@ -22,11 +22,63 @@ interface SyncPostPayload {
 
 // LinkedIn URL validation regex - matches activity posts
 const LINKEDIN_URL_PATTERN = /linkedin\.com\/(posts|feed).*activity[-:][0-9]{19}/;
+// Pattern to extract activity ID
+const ACTIVITY_ID_PATTERN = /activity[-:](\d{19})/;
 
 // Validate if a LinkedIn URL is a real published post
 function isValidLinkedInUrl(url: string | undefined | null): boolean {
   if (!url) return false;
   return LINKEDIN_URL_PATTERN.test(url);
+}
+
+// Extract activity ID from LinkedIn URL
+function extractActivityId(url: string | undefined | null): string | null {
+  if (!url) return null;
+  const match = url.match(ACTIVITY_ID_PATTERN);
+  return match ? match[1] : null;
+}
+
+// Detailed URL validation logging
+function validateAndLogUrl(url: string | undefined | null): { isValid: boolean; activityId: string | null; details: Record<string, unknown> } {
+  const details: Record<string, unknown> = {
+    urlProvided: !!url,
+    urlLength: url?.length ?? 0,
+    urlPreview: url ? url.substring(0, 100) : null,
+  };
+  
+  if (!url) {
+    details.failureReason = 'URL is null or undefined';
+    return { isValid: false, activityId: null, details };
+  }
+  
+  // Check individual pattern components
+  details.containsLinkedIn = url.includes('linkedin.com');
+  details.containsPosts = url.includes('/posts/');
+  details.containsFeed = url.includes('/feed');
+  details.containsActivity = url.includes('activity');
+  details.hasActivityPattern = ACTIVITY_ID_PATTERN.test(url);
+  details.fullPatternMatch = LINKEDIN_URL_PATTERN.test(url);
+  
+  const activityId = extractActivityId(url);
+  details.extractedActivityId = activityId;
+  
+  if (!details.containsLinkedIn) {
+    details.failureReason = 'URL does not contain linkedin.com';
+  } else if (!details.containsPosts && !details.containsFeed) {
+    details.failureReason = 'URL does not contain /posts/ or /feed';
+  } else if (!details.containsActivity) {
+    details.failureReason = 'URL does not contain activity keyword';
+  } else if (!details.hasActivityPattern) {
+    details.failureReason = 'URL does not have valid activity ID pattern (19 digits)';
+  } else if (!details.fullPatternMatch) {
+    details.failureReason = 'URL does not match full LinkedIn post pattern';
+  }
+  
+  return { 
+    isValid: LINKEDIN_URL_PATTERN.test(url), 
+    activityId, 
+    details 
+  };
 }
 
 Deno.serve(async (req) => {
@@ -82,10 +134,17 @@ Deno.serve(async (req) => {
     console.log('   userId:', userId);
     console.log('   status:', status);
     console.log('   action:', action);
-    console.log('   linkedinUrl:', linkedinUrl);
     console.log('   postedAt:', postedAt);
     console.log('   queuedAt:', queuedAt);
     console.log('   extensionAckAt:', extensionAckAt);
+    
+    // Detailed LinkedIn URL logging
+    console.log('🔗 LINKEDIN URL ANALYSIS:');
+    console.log('   Raw URL:', linkedinUrl);
+    console.log('   URL type:', typeof linkedinUrl);
+    
+    const urlValidation = validateAndLogUrl(linkedinUrl);
+    console.log('   Validation result:', JSON.stringify(urlValidation, null, 2));
 
     if (!trackingId && !postId) {
       console.error('❌ Missing trackingId or postId - cannot identify post');
@@ -174,10 +233,24 @@ Deno.serve(async (req) => {
     const newStatus = status || 'posted';
     console.log('📊 New status to set:', newStatus);
     
-    // Check if this is a valid verified LinkedIn URL
-    const hasValidUrl = isValidLinkedInUrl(linkedinUrl);
-    const hadValidUrl = isValidLinkedInUrl(existingPost.linkedin_post_url);
-    console.log('🔗 URL validation - incoming:', hasValidUrl, 'existing:', hadValidUrl);
+    // Check if this is a valid verified LinkedIn URL with detailed logging
+    const incomingUrlValidation = validateAndLogUrl(linkedinUrl);
+    const existingUrlValidation = validateAndLogUrl(existingPost.linkedin_post_url);
+    
+    const hasValidUrl = incomingUrlValidation.isValid;
+    const hadValidUrl = existingUrlValidation.isValid;
+    
+    console.log('🔗 URL VALIDATION COMPARISON:');
+    console.log('   Incoming URL valid:', hasValidUrl);
+    console.log('   Incoming activity ID:', incomingUrlValidation.activityId);
+    console.log('   Existing URL valid:', hadValidUrl);
+    console.log('   Existing activity ID:', existingUrlValidation.activityId);
+    
+    if (!hasValidUrl && linkedinUrl) {
+      console.log('⚠️ INCOMING URL FAILED VALIDATION:');
+      console.log('   Failure reason:', incomingUrlValidation.details.failureReason);
+      console.log('   Full details:', JSON.stringify(incomingUrlValidation.details, null, 2));
+    }
     
     // Build update data
     const updateData: Record<string, unknown> = {
