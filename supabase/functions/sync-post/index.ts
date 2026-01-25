@@ -11,9 +11,13 @@ interface SyncPostPayload {
   postId?: string;
   userId?: string;
   linkedinUrl?: string;
-  status?: 'posted' | 'failed' | 'scheduled';
+  status?: 'posted' | 'failed' | 'scheduled' | 'queued_in_extension' | 'posting';
   postedAt?: string;
   lastError?: string;
+  // NEW: Audit fields
+  action?: 'queue' | 'ack' | 'post' | 'fail';
+  queuedAt?: string;
+  extensionAckAt?: string;
 }
 
 // LinkedIn URL validation regex - matches activity posts
@@ -70,15 +74,18 @@ Deno.serve(async (req) => {
     
     console.log('📋 PARSED PAYLOAD:', JSON.stringify(payload, null, 2));
     
-    const { trackingId, postId, userId, linkedinUrl, status, postedAt, lastError } = payload;
+    const { trackingId, postId, userId, linkedinUrl, status, postedAt, lastError, action, queuedAt, extensionAckAt } = payload;
 
     console.log('🔍 IDENTIFIERS:');
     console.log('   postId:', postId);
     console.log('   trackingId:', trackingId);
     console.log('   userId:', userId);
     console.log('   status:', status);
+    console.log('   action:', action);
     console.log('   linkedinUrl:', linkedinUrl);
     console.log('   postedAt:', postedAt);
+    console.log('   queuedAt:', queuedAt);
+    console.log('   extensionAckAt:', extensionAckAt);
 
     if (!trackingId && !postId) {
       console.error('❌ Missing trackingId or postId - cannot identify post');
@@ -177,9 +184,18 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Handle posted status
-    if (newStatus === 'posted') {
-      // Always set status to posted immediately when extension reports success
+    // Handle action-based updates (new audit logging)
+    if (action === 'queue') {
+      // Extension received the post and queued it
+      updateData.status = 'queued_in_extension';
+      updateData.queued_at = queuedAt || new Date().toISOString();
+      console.log('📥 Post queued in extension');
+    } else if (action === 'ack') {
+      // Extension acknowledged it will process the post
+      updateData.extension_ack_at = extensionAckAt || new Date().toISOString();
+      console.log('✅ Extension ACK received');
+    } else if (action === 'post' || newStatus === 'posted') {
+      // Post was actually published
       updateData.status = 'posted';
       updateData.posted_at = postedAt || new Date().toISOString();
       
@@ -198,14 +214,17 @@ Deno.serve(async (req) => {
         updateData.verified = false;
         console.log('⏳ No LinkedIn URL - verification pending');
       }
-    }
-
-    // Handle failed status
-    if (newStatus === 'failed') {
+    } else if (action === 'fail' || newStatus === 'failed') {
+      // Post failed
       updateData.status = 'failed';
       updateData.last_error = lastError || 'Unknown error';
       updateData.retry_count = 1;
       updateData.verified = false;
+    } else if (newStatus === 'queued_in_extension') {
+      updateData.status = 'queued_in_extension';
+      updateData.queued_at = queuedAt || new Date().toISOString();
+    } else if (newStatus === 'posting') {
+      updateData.status = 'posting';
     }
 
     console.log('📝 UPDATE DATA:', JSON.stringify(updateData, null, 2));

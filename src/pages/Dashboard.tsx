@@ -256,9 +256,10 @@ const DashboardPage = () => {
     };
   }, [fetchPosts, updatePostAnalytics]);
 
-  // Calculate real stats - dynamic agent count
+  // Calculate real stats - count scheduled + posted
   const totalViews = analyticsPosts.reduce((sum, p) => sum + (p.views || 0), 0);
-  const scheduledCount = scheduledPosts.length;
+  const scheduledCount = scheduledPosts.filter(p => p.status === 'scheduled' || p.status === 'queued_in_extension').length;
+  const postedCount = scheduledPosts.filter(p => p.status === 'posted').length;
   const activeAgentsCount = agents.filter(a => a.is_active).length;
 
   const stats = [
@@ -279,7 +280,7 @@ const DashboardPage = () => {
     {
       label: "Upcoming Posts",
       value: scheduledCount.toString(),
-      subtitle: "Scheduled to publish",
+      subtitle: `${postedCount} already posted`,
       icon: Calendar,
       color: "from-warning to-warning/60",
     },

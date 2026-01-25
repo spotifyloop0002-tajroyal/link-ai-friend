@@ -2,6 +2,16 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generatePostTrackingId, embedTrackingId, parseScheduleTime } from "@/lib/postHelpers";
+import { 
+  PostStatus, 
+  validatePreflightForScheduling, 
+  validatePreflightForPostNow,
+  canEditPost,
+  canDeletePost,
+  canPostNow,
+  isProcessingState,
+  shouldArchivePost,
+} from "@/lib/postLifecycle";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -26,10 +36,16 @@ export interface GeneratedPost {
   imagePrompt?: string;
   imageUrl?: string;
   isGeneratingImage?: boolean;
-  status?: 'draft' | 'scheduled' | 'published' | 'queued_in_extension';
+  status?: PostStatus;
   scheduledTime?: string; // ISO string for when to post
   trackingId?: string;
   dbId?: string; // Database ID after saving
+  // NEW: Approval and lifecycle fields
+  approved?: boolean;
+  imageSkipped?: boolean;
+  queuedAt?: string;
+  extensionAckAt?: string;
+  postedAt?: string;
 }
 
 export interface AgentSettings {

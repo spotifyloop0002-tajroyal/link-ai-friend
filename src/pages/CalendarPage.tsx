@@ -55,16 +55,19 @@ const CalendarPage = () => {
 
   const getPostsForDate = (date: Date) => {
     return posts.filter((post) => {
-      if (!post.scheduled_time) return false;
-      return isSameDay(new Date(post.scheduled_time), date);
+      // Show both scheduled and posted posts
+      if (!post.scheduled_time && !post.posted_at) return false;
+      const postDate = post.posted_at ? new Date(post.posted_at) : new Date(post.scheduled_time!);
+      return isSameDay(postDate, date);
     });
   };
 
   const selectedDatePosts = selectedDate ? getPostsForDate(selectedDate) : [];
 
+  // Show ALL posts in list (scheduled + posted)
   const filteredPosts = filterAgent === "all"
-    ? posts.filter(p => p.status === "scheduled")
-    : posts.filter((post) => post.agent_name === filterAgent && post.status === "scheduled");
+    ? posts.filter(p => p.status === "scheduled" || p.status === "posted" || p.status === "queued_in_extension")
+    : posts.filter((post) => post.agent_name === filterAgent && (post.status === "scheduled" || post.status === "posted"));
 
   const getAgentColor = (agentName: string | null) => {
     if (!agentName) return "bg-muted";

@@ -18,7 +18,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useAgentChat, ChatMessage } from "@/hooks/useAgentChat";
+import { useAgentChat, ChatMessage, GeneratedPost } from "@/hooks/useAgentChat";
 import { useAgents } from "@/hooks/useAgents";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { usePostingLimits } from "@/hooks/usePostingLimits";
@@ -30,6 +30,11 @@ import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { supabase } from "@/integrations/supabase/client";
+import { 
+  validatePreflightForScheduling, 
+  validatePreflightForPostNow,
+  PostStatus,
+} from "@/lib/postLifecycle";
 
 const agentTypes = [
   { id: "comedy", label: "Comedy/Humorous" },
@@ -136,25 +141,65 @@ const AgentChatPage = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Validate post before publishing
-  const validatePostForPublishing = (post?: { id: string; content: string; imageUrl?: string }): { valid: boolean; error?: string } => {
-    if (!post) {
-      return { valid: false, error: "No post available to publish. Generate a post first." };
+  // STRICT PREFLIGHT VALIDATION before posting
+  const runPreflightValidation = (post: GeneratedPost, forScheduling: boolean = false): { valid: boolean; errors: string[] } => {
+    if (forScheduling) {
+      return validatePreflightForScheduling({
+        content: post.content,
+        imageUrl: post.imageUrl,
+        imageSkipped: post.imageSkipped,
+        scheduledTime: post.scheduledTime || post.scheduledDateTime,
+        approved: post.approved,
+        status: post.status,
+      });
+    } else {
+      return validatePreflightForPostNow({
+        content: post.content,
+        imageUrl: post.imageUrl,
+        imageSkipped: post.imageSkipped,
+        approved: post.approved,
+        status: post.status,
+      });
     }
-    if (!post.content?.trim()) {
-      return { valid: false, error: "Post has no content. Generate a post first." };
-    }
-    if (post.content.trim().length < 10) {
-      return { valid: false, error: "Post content is too short. Please generate a valid post." };
-    }
-    return { valid: true };
   };
 
-  const postSingleNow = async (post: { id: string; content: string; imageUrl?: string }) => {
-    const validation = validatePostForPublishing(post);
+  // Approve a post for scheduling/posting
+  const handleApprovePost = async (postId: string) => {
+    const post = generatedPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    // Validate content exists before approving
+    if (!post.content || post.content.trim().length < 10) {
+      toast.error("Cannot approve: Post content is too short or missing");
+      return;
+    }
+
+    // Ask about image if not set and not skipped
+    if (!post.imageUrl && !post.imageSkipped) {
+      // Mark as image skipped if user is approving without image
+      updatePost(postId, { 
+        approved: true, 
+        imageSkipped: true,
+        status: 'approved' as PostStatus,
+      });
+      toast.success("✅ Post approved (no image)");
+    } else {
+      updatePost(postId, { 
+        approved: true,
+        status: 'approved' as PostStatus,
+      });
+      toast.success("✅ Post approved and ready to schedule!");
+    }
+  };
+
+  // Post a single post NOW with preflight validation
+  const postSingleNow = async (post: GeneratedPost) => {
+    // PREFLIGHT VALIDATION
+    const validation = runPreflightValidation(post, false);
     if (!validation.valid) {
-      toast.error(validation.error!);
-      addActivityEntry("failed", validation.error!, post?.id);
+      const errorMsg = validation.errors.join(". ");
+      toast.error(errorMsg);
+      addActivityEntry("failed", errorMsg, post.id);
       return;
     }
 
@@ -165,23 +210,42 @@ const AgentChatPage = () => {
     }
 
     setIsPostingNow(true);
+    updatePost(post.id, { status: 'posting' as PostStatus });
     addActivityEntry("sending", "Sending to extension...", post.id);
     
+    // Save to DB if not already saved
+    let dbPost = post;
+    if (!post.dbId) {
+      const savedPost = await savePostToDatabase(post);
+      if (savedPost) {
+        dbPost = savedPost;
+      }
+    }
+    
     const result = await postNow({
-      id: post.id,
-      content: post.content,
-      photo_url: post.imageUrl,
+      id: dbPost.dbId || dbPost.id,
+      content: dbPost.content,
+      photo_url: dbPost.imageUrl,
       scheduled_time: new Date().toISOString(),
     });
 
     if (result?.success) {
       addActivityEntry("queued", "Sent to extension. Waiting for LinkedIn confirmation...", post.id);
       toast.info("📤 Publishing to LinkedIn...");
-      updatePost(post.id, { status: 'published' });
-      toast.success(`✅ Post published successfully at ${format(new Date(), 'h:mm a')}`);
+      updatePost(post.id, { status: 'queued_in_extension' as PostStatus, queuedAt: new Date().toISOString() });
+      
+      // Update DB with queued status
+      if (dbPost.dbId) {
+        await supabase.from('posts').update({ 
+          status: 'queued_in_extension',
+          queued_at: new Date().toISOString(),
+          sent_to_extension_at: new Date().toISOString(),
+        }).eq('id', dbPost.dbId);
+      }
     } else {
       const errorMsg = result?.error || "Extension rejected the post";
       addActivityEntry("failed", errorMsg, post.id);
+      updatePost(post.id, { status: 'failed' as PostStatus });
       toast.error(`❌ ${errorMsg}`);
     }
     
@@ -213,12 +277,14 @@ const AgentChatPage = () => {
 
     if (wantsPostNow && generatedPosts.length > 0) {
       const first = generatedPosts[0];
-      const validation = validatePostForPublishing(first);
-      if (!validation.valid) {
-        toast.error(validation.error!);
-        addActivityEntry("failed", validation.error!, first?.id);
+      
+      // Check if post is approved
+      if (!first.approved) {
+        toast.error("Post must be approved first. Click 'Approve' before posting.");
+        addActivityEntry("failed", "Post not approved", first.id);
         return;
       }
+      
       await postSingleNow(first);
       return;
     }
@@ -256,8 +322,8 @@ const AgentChatPage = () => {
       const postToSchedule = response.postToSchedule;
       const scheduledTime = new Date(response.scheduledTime);
       
-      // Save to database
-      const savedPost = await savePostToDatabase({
+      // Save to database with approved and scheduled status
+      const postToSave: GeneratedPost = {
         id: postToSchedule.id,
         content: postToSchedule.content,
         suggestedTime: postToSchedule.suggestedTime || scheduledTime.toISOString(),
@@ -265,8 +331,12 @@ const AgentChatPage = () => {
         scheduledDateTime: scheduledTime.toISOString(),
         imageUrl: postToSchedule.imageUrl,
         imagePrompt: postToSchedule.imagePrompt,
-        status: 'scheduled',
-      }, scheduledTime);
+        status: 'scheduled' as PostStatus,
+        approved: true, // Auto-approved for auto-schedule
+        imageSkipped: !postToSchedule.imageUrl, // Skip image if not provided
+      };
+      
+      const savedPost = await savePostToDatabase(postToSave, scheduledTime);
       
       if (savedPost) {
         // Send to extension immediately with proper format including trackingId
@@ -324,14 +394,11 @@ const AgentChatPage = () => {
   };
 
   const handlePostAllNow = async () => {
-    if (generatedPosts.length === 0) {
-      toast.error("No posts to publish. Generate posts first.");
-      return;
-    }
-
-    const invalidPosts = generatedPosts.filter(p => !p.content?.trim() || p.content.trim().length < 10);
-    if (invalidPosts.length > 0) {
-      toast.error(`${invalidPosts.length} post(s) have no content. Please regenerate them.`);
+    // Only post approved posts
+    const approvedPosts = generatedPosts.filter(p => p.approved);
+    
+    if (approvedPosts.length === 0) {
+      toast.error("No approved posts to publish. Approve posts first before posting.");
       return;
     }
 
@@ -342,7 +409,14 @@ const AgentChatPage = () => {
 
     setIsPostingNow(true);
     
-    for (const post of generatedPosts) {
+    for (const post of approvedPosts) {
+      // Run preflight validation for each
+      const validation = runPreflightValidation(post, false);
+      if (!validation.valid) {
+        addActivityEntry("failed", validation.errors.join(". "), post.id);
+        continue; // Skip this post but continue with others
+      }
+      
       addActivityEntry("sending", `Posting "${post.content.substring(0, 30)}..."`, post.id);
       await postSingleNow(post);
     }
@@ -577,7 +651,10 @@ const AgentChatPage = () => {
                         onDelete={() => deletePost(post.id)}
                         onRegenerate={() => regeneratePost(post.id, currentAgentSettings, currentUserContext)}
                         onGenerateImage={() => generateImageForPost(post.id)}
+                        onApprove={() => handleApprovePost(post.id)}
+                        onPostNow={() => postSingleNow(post)}
                         isLoading={isLoading}
+                        isPosting={isPostingNow}
                       />
                     ))}
                   </div>
@@ -597,14 +674,19 @@ const AgentChatPage = () => {
                     variant="success" 
                     className="w-full gap-2"
                     onClick={handlePostAllNow}
-                    disabled={generatedPosts.length === 0 || isPostingNow || !isExtensionConnected}
+                    disabled={
+                      generatedPosts.length === 0 || 
+                      isPostingNow || 
+                      !isExtensionConnected ||
+                      !generatedPosts.some(p => p.approved) // Require at least one approved post
+                    }
                   >
                     {isPostingNow ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Linkedin className="w-4 h-4" />
                     )}
-                    {isPostingNow ? "Posting..." : `Post Now (${generatedPosts.length})`}
+                    {isPostingNow ? "Posting..." : `Post All Approved (${generatedPosts.filter(p => p.approved).length})`}
                   </Button>
                 </div>
 

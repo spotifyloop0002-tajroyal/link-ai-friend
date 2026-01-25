@@ -382,11 +382,14 @@ export type Database = {
         Row: {
           agent_id: string | null
           agent_name: string | null
+          approved: boolean | null
           comments_count: number | null
           content: string
           content_with_tracking: string | null
           created_at: string
+          extension_ack_at: string | null
           id: string
+          image_skipped: boolean | null
           last_error: string | null
           last_synced_at: string | null
           likes_count: number | null
@@ -395,6 +398,7 @@ export type Database = {
           next_retry_at: string | null
           photo_url: string | null
           posted_at: string | null
+          queued_at: string | null
           retry_count: number | null
           scheduled_time: string | null
           sent_to_extension_at: string | null
@@ -409,11 +413,14 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           agent_name?: string | null
+          approved?: boolean | null
           comments_count?: number | null
           content: string
           content_with_tracking?: string | null
           created_at?: string
+          extension_ack_at?: string | null
           id?: string
+          image_skipped?: boolean | null
           last_error?: string | null
           last_synced_at?: string | null
           likes_count?: number | null
@@ -422,6 +429,7 @@ export type Database = {
           next_retry_at?: string | null
           photo_url?: string | null
           posted_at?: string | null
+          queued_at?: string | null
           retry_count?: number | null
           scheduled_time?: string | null
           sent_to_extension_at?: string | null
@@ -436,11 +444,14 @@ export type Database = {
         Update: {
           agent_id?: string | null
           agent_name?: string | null
+          approved?: boolean | null
           comments_count?: number | null
           content?: string
           content_with_tracking?: string | null
           created_at?: string
+          extension_ack_at?: string | null
           id?: string
+          image_skipped?: boolean | null
           last_error?: string | null
           last_synced_at?: string | null
           likes_count?: number | null
@@ -449,6 +460,7 @@ export type Database = {
           next_retry_at?: string | null
           photo_url?: string | null
           posted_at?: string | null
+          queued_at?: string | null
           retry_count?: number | null
           scheduled_time?: string | null
           sent_to_extension_at?: string | null
