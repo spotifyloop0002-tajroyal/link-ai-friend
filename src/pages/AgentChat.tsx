@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -18,23 +18,18 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useAgentChat, ChatMessage, GeneratedPost } from "@/hooks/useAgentChat";
+import { useAgentChat, GeneratedPost } from "@/hooks/useAgentChat";
 import { useAgents } from "@/hooks/useAgents";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { usePostingLimits } from "@/hooks/usePostingLimits";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
-import { SchedulingDialog } from "@/components/agents/SchedulingDialog";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  validatePreflightForScheduling, 
-  validatePreflightForPostNow,
-  PostStatus,
-} from "@/lib/postLifecycle";
+import { PostStatus } from "@/lib/postLifecycle";
 
 const agentTypes = [
   { id: "comedy", label: "Comedy/Humorous" },
@@ -102,18 +97,15 @@ const AgentChatPage = () => {
     confirmPreviewPost,
     clearPreview,
     savePostToDatabase,
+    setGeneratedPosts, // Need this for adding approved posts
   } = useAgentChat(currentAgentSettings, currentUserContext, agentId);
 
-  // Scheduling dialog state
-  const [showSchedulingDialog, setShowSchedulingDialog] = useState(false);
-  const [isScheduling, setIsScheduling] = useState(false);
+  // Scheduling dialog state removed - scheduling is now agent-driven
 
   // Extension hook for posting to LinkedIn
   const {
     isConnected: isExtensionConnected,
     sendPendingPosts,
-    postNow,
-    isLoading: isExtensionLoading,
   } = useLinkedBotExtension();
 
   const [isPostingNow, setIsPostingNow] = useState(false);
@@ -141,27 +133,7 @@ const AgentChatPage = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // STRICT PREFLIGHT VALIDATION before posting
-  const runPreflightValidation = (post: GeneratedPost, forScheduling: boolean = false): { valid: boolean; errors: string[] } => {
-    if (forScheduling) {
-      return validatePreflightForScheduling({
-        content: post.content,
-        imageUrl: post.imageUrl,
-        imageSkipped: post.imageSkipped,
-        scheduledTime: post.scheduledTime || post.scheduledDateTime,
-        approved: post.approved,
-        status: post.status,
-      });
-    } else {
-      return validatePreflightForPostNow({
-        content: post.content,
-        imageUrl: post.imageUrl,
-        imageSkipped: post.imageSkipped,
-        approved: post.approved,
-        status: post.status,
-      });
-    }
-  };
+  // Preflight validation removed - scheduling is now fully agent-driven with validation in auto_schedule handler
 
   // Approve a post for scheduling/posting
   const handleApprovePost = async (postId: string) => {
@@ -192,65 +164,8 @@ const AgentChatPage = () => {
     }
   };
 
-  // Post a single post NOW with preflight validation
-  const postSingleNow = async (post: GeneratedPost) => {
-    // PREFLIGHT VALIDATION
-    const validation = runPreflightValidation(post, false);
-    if (!validation.valid) {
-      const errorMsg = validation.errors.join(". ");
-      toast.error(errorMsg);
-      addActivityEntry("failed", errorMsg, post.id);
-      return;
-    }
-
-    if (!isExtensionConnected) {
-      toast.error("Chrome extension not connected. Please connect from Dashboard first.");
-      addActivityEntry("failed", "Extension not connected", post.id);
-      return;
-    }
-
-    setIsPostingNow(true);
-    updatePost(post.id, { status: 'posting' as PostStatus });
-    addActivityEntry("sending", "Sending to extension...", post.id);
-    
-    // Save to DB if not already saved
-    let dbPost = post;
-    if (!post.dbId) {
-      const savedPost = await savePostToDatabase(post);
-      if (savedPost) {
-        dbPost = savedPost;
-      }
-    }
-    
-    const result = await postNow({
-      id: dbPost.dbId || dbPost.id,
-      content: dbPost.content,
-      photo_url: dbPost.imageUrl,
-      scheduled_time: new Date().toISOString(),
-    });
-
-    if (result?.success) {
-      addActivityEntry("queued", "Sent to extension. Waiting for LinkedIn confirmation...", post.id);
-      toast.info("📤 Publishing to LinkedIn...");
-      updatePost(post.id, { status: 'queued_in_extension' as PostStatus, queuedAt: new Date().toISOString() });
-      
-      // Update DB with queued status
-      if (dbPost.dbId) {
-        await supabase.from('posts').update({ 
-          status: 'queued_in_extension',
-          queued_at: new Date().toISOString(),
-          sent_to_extension_at: new Date().toISOString(),
-        }).eq('id', dbPost.dbId);
-      }
-    } else {
-      const errorMsg = result?.error || "Extension rejected the post";
-      addActivityEntry("failed", errorMsg, post.id);
-      updatePost(post.id, { status: 'failed' as PostStatus });
-      toast.error(`❌ ${errorMsg}`);
-    }
-    
-    setIsPostingNow(false);
-  };
+  // Post execution is now FULLY agent-driven - removed postSingleNow and postNow functions
+  // The auto_schedule response handler above manages all posting via extension
 
   const handleSendMessage = async () => {
     const hasImages = uploadedImages.length > 0;
@@ -269,31 +184,20 @@ const AgentChatPage = () => {
     const imageUrls = getImageUrls();
     setChatInput("");
 
-    // Check for posting commands
+    // "Post now" commands are now handled by the agent via auto_schedule
+    // We inform the user to use the agent for posting
     const wantsPostNow =
       /\bpost(\s+it)?\s+now\b/i.test(message) ||
       /\bpublish(\s+it)?\s+now\b/i.test(message) ||
       /\bsend(\s+it)?\s+now\b/i.test(message);
-
-    if (wantsPostNow && generatedPosts.length > 0) {
-      const first = generatedPosts[0];
-      
-      // Check if post is approved
-      if (!first.approved) {
-        toast.error("Post must be approved first. Click 'Approve' before posting.");
-        addActivityEntry("failed", "Post not approved", first.id);
-        return;
-      }
-      
-      await postSingleNow(first);
-      return;
-    }
 
     if (wantsPostNow && generatedPosts.length === 0) {
       toast.error("No post to publish. Generate a post first!");
       addActivityEntry("failed", "No post to publish - blocked", undefined);
       return;
     }
+    
+    // Let the agent handle the post now request naturally via message
 
     // If images are uploaded, include them in the message
     const finalMessage = hasImages && imageUrls.length > 0
@@ -316,36 +220,45 @@ const AgentChatPage = () => {
     }
     
     // Handle auto_schedule response - automatically save and send to extension
+    // This is the ONLY way posts get added to Generated Posts (after approval)
     if (response?.type === "auto_schedule" && response.postToSchedule && response.scheduledTime) {
-      console.log("🚀 Auto-scheduling post:", response);
+      console.log("🚀 Auto-scheduling post (user approved):", response);
       
       const postToSchedule = response.postToSchedule;
       const scheduledTime = new Date(response.scheduledTime);
+      
+      // Validate extension is connected
+      if (!isExtensionConnected) {
+        toast.error("❌ Extension not connected. Please install and connect the Chrome extension first.");
+        addActivityEntry("failed", "Extension not connected", postToSchedule.id);
+        return;
+      }
       
       // Save to database with approved and scheduled status
       const postToSave: GeneratedPost = {
         id: postToSchedule.id,
         content: postToSchedule.content,
         suggestedTime: postToSchedule.suggestedTime || scheduledTime.toISOString(),
-        reasoning: postToSchedule.reasoning || "Auto-scheduled",
+        reasoning: postToSchedule.reasoning || "Auto-scheduled after approval",
         scheduledDateTime: scheduledTime.toISOString(),
         imageUrl: postToSchedule.imageUrl,
         imagePrompt: postToSchedule.imagePrompt,
         status: 'scheduled' as PostStatus,
-        approved: true, // Auto-approved for auto-schedule
+        approved: true, // Auto-approved since user explicitly approved
         imageSkipped: !postToSchedule.imageUrl, // Skip image if not provided
       };
       
       const savedPost = await savePostToDatabase(postToSave, scheduledTime);
       
       if (savedPost) {
-        // Send to extension immediately with proper format including trackingId
+        // NOW add to Generated Posts (only after approval)
+        updatePost(savedPost.id, savedPost);
+        
+        // Send to extension immediately
         addActivityEntry("sending", `Scheduling for ${format(scheduledTime, 'MMM d, h:mm a')}...`, savedPost.id);
         
-        // CRITICAL: Ensure scheduledTime is ALWAYS a valid ISO string (not undefined/NaN)
         const validScheduledTime = scheduledTime.toISOString();
         
-        // Validate we have required fields before sending
         if (!savedPost.trackingId) {
           console.error("❌ Missing trackingId on saved post");
           addActivityEntry("failed", "Missing tracking ID", savedPost.id);
@@ -353,34 +266,42 @@ const AgentChatPage = () => {
           return;
         }
         
-        // Extension expects: id, trackingId, content, imageUrl, scheduledTime, userId
         const postForExtension = {
           id: savedPost.dbId || savedPost.id,
-          trackingId: savedPost.trackingId, // CRITICAL: Extension uses this for alarm name
+          trackingId: savedPost.trackingId,
           content: savedPost.content,
           imageUrl: savedPost.imageUrl || undefined,
-          scheduledTime: validScheduledTime, // MUST be a valid ISO string - never undefined
+          scheduledTime: validScheduledTime,
           photo_url: savedPost.imageUrl || undefined,
           scheduled_time: validScheduledTime,
         };
         
         console.log("📤 Sending to extension:", postForExtension);
-        console.log("📤 scheduledTime value:", validScheduledTime, "Type:", typeof validScheduledTime);
         
         const result = await sendPendingPosts([postForExtension as any]);
         
         if (result.success) {
+          // Add to Generated Posts panel ONLY after successful extension handoff
+          const finalPost = { 
+            ...savedPost, 
+            status: 'queued_in_extension' as PostStatus,
+            queuedAt: new Date().toISOString(),
+          };
+          
+          // Use setGeneratedPosts from hook to add the approved post
+          setGeneratedPosts(prev => [finalPost, ...prev.filter(p => p.id !== finalPost.id)]);
+          
           addActivityEntry("scheduled", `Scheduled for ${format(scheduledTime, 'MMM d, h:mm a')}`, savedPost.id);
           toast.success(`✅ Post scheduled for ${format(scheduledTime, 'MMM d, h:mm a')}!`);
-          updatePost(savedPost.id, { status: 'queued_in_extension' });
           
           // Update database to mark sent to extension
           await supabase.from('posts').update({ 
-            sent_to_extension_at: new Date().toISOString() 
+            sent_to_extension_at: new Date().toISOString(),
+            status: 'queued_in_extension',
           }).eq('id', savedPost.dbId || savedPost.id);
         } else {
           addActivityEntry("failed", result.error || "Failed to send to extension", savedPost.id);
-          toast.error(result.error || "Failed to send to extension");
+          toast.error(result.error || "❌ Failed to send to extension");
         }
       }
     }
@@ -393,36 +314,7 @@ const AgentChatPage = () => {
     }
   };
 
-  const handlePostAllNow = async () => {
-    // Only post approved posts
-    const approvedPosts = generatedPosts.filter(p => p.approved);
-    
-    if (approvedPosts.length === 0) {
-      toast.error("No approved posts to publish. Approve posts first before posting.");
-      return;
-    }
-
-    if (!isExtensionConnected) {
-      toast.error("Chrome extension not connected. Please connect from Dashboard first.");
-      return;
-    }
-
-    setIsPostingNow(true);
-    
-    for (const post of approvedPosts) {
-      // Run preflight validation for each
-      const validation = runPreflightValidation(post, false);
-      if (!validation.valid) {
-        addActivityEntry("failed", validation.errors.join(". "), post.id);
-        continue; // Skip this post but continue with others
-      }
-      
-      addActivityEntry("sending", `Posting "${post.content.substring(0, 30)}..."`, post.id);
-      await postSingleNow(post);
-    }
-    
-    setIsPostingNow(false);
-  };
+  // handlePostAllNow removed - posting is now fully agent-driven
 
   const handleBack = () => {
     resetChat();
@@ -652,7 +544,6 @@ const AgentChatPage = () => {
                         onRegenerate={() => regeneratePost(post.id, currentAgentSettings, currentUserContext)}
                         onGenerateImage={() => generateImageForPost(post.id)}
                         onApprove={() => handleApprovePost(post.id)}
-                        onPostNow={() => postSingleNow(post)}
                         isLoading={isLoading}
                         isPosting={isPostingNow}
                       />
@@ -660,35 +551,15 @@ const AgentChatPage = () => {
                   </div>
                 </ScrollArea>
 
-                {/* Post Now Button */}
-                <div className="border-t border-border pt-4 mt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    {!isExtensionConnected && (
-                      <span className="text-sm text-amber-500 flex items-center gap-1">
-                        <Linkedin className="w-4 h-4" />
-                        Extension not connected
-                      </span>
-                    )}
-                  </div>
-                  <Button 
-                    variant="success" 
-                    className="w-full gap-2"
-                    onClick={handlePostAllNow}
-                    disabled={
-                      generatedPosts.length === 0 || 
-                      isPostingNow || 
-                      !isExtensionConnected ||
-                      !generatedPosts.some(p => p.approved) // Require at least one approved post
-                    }
-                  >
-                    {isPostingNow ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
+                {/* Extension Status - Post Now buttons REMOVED (agent-driven) */}
+                {!isExtensionConnected && (
+                  <div className="border-t border-border pt-4 mt-4">
+                    <span className="text-sm text-amber-500 flex items-center gap-2">
                       <Linkedin className="w-4 h-4" />
-                    )}
-                    {isPostingNow ? "Posting..." : `Post All Approved (${generatedPosts.filter(p => p.approved).length})`}
-                  </Button>
-                </div>
+                      Extension not connected - connect to enable posting
+                    </span>
+                  </div>
+                )}
 
                 {/* Extension Activity Log */}
                 <div className="border-t border-border pt-3 mt-3 h-[140px]">
@@ -699,45 +570,7 @@ const AgentChatPage = () => {
           </div>
         </div>
 
-        {/* Scheduling Dialog */}
-        <SchedulingDialog
-          open={showSchedulingDialog || !!previewPost}
-          previewPost={previewPost}
-          onPostNow={async () => {
-            setIsScheduling(true);
-            const post = await confirmPreviewPost();
-            if (post) {
-              await postSingleNow(post);
-            }
-            setShowSchedulingDialog(false);
-            setIsScheduling(false);
-          }}
-          onSchedule={async (date, time) => {
-            setIsScheduling(true);
-            const post = await confirmPreviewPost(date);
-            if (post) {
-              // Send to extension for scheduling
-              const result = await sendPendingPosts([{
-                id: post.dbId || post.id,
-                content: post.content,
-                photo_url: post.imageUrl,
-                scheduled_time: post.scheduledTime || date.toISOString(),
-              }]);
-              
-              if (result.success) {
-                addActivityEntry("scheduled", `Scheduled for ${format(date, 'MMM d')} at ${time}`, post.id);
-              }
-            }
-            setShowSchedulingDialog(false);
-            setIsScheduling(false);
-            toast.success(`Post scheduled for ${format(date, "MMM d")} at ${time}`);
-          }}
-          onCancel={() => {
-            clearPreview();
-            setShowSchedulingDialog(false);
-          }}
-          isLoading={isScheduling}
-        />
+        {/* SchedulingDialog removed - scheduling is now fully agent-driven */}
       </div>
     </DashboardLayout>
   );

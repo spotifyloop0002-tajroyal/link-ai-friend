@@ -269,50 +269,20 @@ export function useAgentChat(
         return data;
       }
 
-      // If posts were generated directly, add them
+      // If posts were generated directly, DO NOT add to generatedPosts yet
+      // Posts only appear in Generated Posts panel AFTER user approves
+      // The agent will ask for approval, and when user confirms, we use auto_schedule
       if (data.type === "posts_generated" && data.posts?.length > 0) {
-        // Mark posts for image generation if toggle is ON
-        const postsWithImageFlag = data.posts.map((post: GeneratedPost) => ({
-          ...post,
-          generateImage: options?.generateImage ?? false,
-        }));
+        // Store as "pending approval" - shown in chat but NOT in Generated Posts panel
+        console.log("📝 Posts created - awaiting user approval before adding to Generated Posts");
         
-        setGeneratedPosts(prev => [...postsWithImageFlag, ...prev]);
-        toast.success(`Created ${data.posts.length} post(s)!`);
+        // We no longer auto-add posts. The flow is:
+        // 1. Agent shows draft in chat
+        // 2. Agent asks for approval
+        // 3. User approves with time → auto_schedule triggered
+        // 4. ONLY THEN post is added to generatedPosts via auto_schedule handler
         
-        // Auto-generate images if toggle is ON
-        if (options?.generateImage) {
-          console.log("🎨 Auto-generating images for posts...");
-          toast.info("Generating AI images...");
-          
-          // Generate images for each new post
-          for (const post of postsWithImageFlag) {
-            try {
-              const { data: imageData, error: imageError } = await supabase.functions.invoke("generate-post-image", {
-                body: {
-                  prompt: post.imagePrompt,
-                  postContent: post.content,
-                },
-              });
-
-              if (imageError) throw imageError;
-              if (imageData.error) throw new Error(imageData.error);
-
-              // Update the post with the generated image
-              setGeneratedPosts(prev =>
-                prev.map(p => p.id === post.id ? { 
-                  ...p, 
-                  imageUrl: imageData.imageUrl,
-                  isGeneratingImage: false 
-                } : p)
-              );
-              toast.success("Image generated!");
-            } catch (imgError: any) {
-              console.error("Image generation error:", imgError);
-              toast.error(`Image failed: ${imgError.message || "Unknown error"}`);
-            }
-          }
-        }
+        toast.info(`Post ready! Please review and approve in chat.`);
       }
 
       return data;

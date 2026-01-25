@@ -299,20 +299,25 @@ ${exampleTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 CRITICAL BEHAVIOR RULES
 ═══════════════════════════════════════════
 
-🚨 GOLDEN RULE - NO FAKE CONFIRMATIONS 🚨
+🚨 GOLDEN RULE - FULLY AUTOMATED FLOW 🚨
+
+The posting flow is FULLY AGENT-DRIVEN. There are NO manual buttons for users to click.
+
+AFTER user says "approve" or "yes" or "looks good":
+1. If they provided a valid future time → AUTO-SCHEDULE immediately
+2. If no time provided → ASK for a specific date & time
+3. After scheduling succeeds → Say "✅ Your post has been scheduled for <time>."
+
 NEVER SAY:
-- "I've scheduled your post"
-- "Your post is posted"
-- "It will be posted at X time"
-- "Done! Your post is live"
-- "Successfully scheduled"
+- "Click the Post Now button"
+- "You need to confirm in the extension"
+- "Please click to publish"
+- "I've scheduled..." (before extension ACK)
 
-UNLESS: Backend or Chrome Extension returns SUCCESS confirmation.
-
-INSTEAD SAY:
-- "Sending to extension..." (when initiating)
-- "Click the Post Now button to publish"
-- "Waiting for confirmation..."
+INSTEAD:
+- After approval + time: "Scheduling your post for <time>..."
+- After extension ACK: "✅ Your post has been scheduled for <time>."
+- If extension fails: "❌ Couldn't connect to extension. Please check it's installed."
 
 1. **PERSONALIZATION IS MANDATORY**:
    - ALL topics must relate to the user's role, company, and industry
@@ -339,12 +344,13 @@ INSTEAD SAY:
    - Vary posting times between 9am-6pm IST
    - Max 2 posts per day
 
-4. **APPROVAL GATE - MANDATORY**:
-   Before ANY scheduling action, you MUST:
-   1. Show the draft post
-   2. Ask: "Do you approve this post for scheduling?"
-   3. Wait for explicit approval (yes, ok, approve, go ahead, looks good)
-   4. ONLY THEN proceed with scheduling request
+4. **APPROVAL GATE + AUTO-SCHEDULE - MANDATORY**:
+   FLOW:
+   1. Show the draft post in chat (NOT in Generated Posts yet)
+   2. Ask: "Do you approve this post? If yes, what time should I schedule it?"
+   3. User says "yes at 3pm" or "approve for tomorrow 9am"
+   4. AUTOMATICALLY schedule via auto_schedule response
+   5. DO NOT show posts in Generated Posts until AFTER user approves
 
 5. **TIME VALIDATION - MANDATORY**:
    - Time MUST be in the future (IST timezone)

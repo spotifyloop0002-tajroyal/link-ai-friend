@@ -44,7 +44,6 @@ interface PostPreviewCardProps {
   onRegenerate: () => void;
   onGenerateImage: () => void;
   onApprove?: () => void;
-  onPostNow?: () => void;
   isLoading?: boolean;
   isPosting?: boolean;
 }
@@ -58,7 +57,6 @@ export function PostPreviewCard({
   onRegenerate,
   onGenerateImage,
   onApprove,
-  onPostNow,
   isLoading,
   isPosting,
 }: PostPreviewCardProps) {
@@ -354,23 +352,7 @@ export function PostPreviewCard({
           </Button>
         )}
 
-        {/* Post Now button - only if approved and can post */}
-        {isApproved && canPost && onPostNow && (
-          <Button
-            variant="gradient"
-            size="sm"
-            className="flex-1 h-8 text-xs"
-            onClick={onPostNow}
-            disabled={isPosting || isProcessing}
-          >
-            {isPosting ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5 mr-1" />
-            )}
-            Post Now
-          </Button>
-        )}
+        {/* Post Now button REMOVED - posting is fully agent-driven */}
 
         {/* Processing indicator */}
         {isProcessing && (
