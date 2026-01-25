@@ -1032,8 +1032,6 @@ Here's what I can do:
 • **Schedule posts** - Say "schedule it for tomorrow at 2pm"
 • **Batch create** - Say "create posts for next 5 days"
 
-**My Promise:** I will NEVER say "scheduled" or "posted" until I've confirmed the action actually succeeded. I'll always ask for your approval before taking any action.
-
 What would you like to create today?`;
         break;
       }
