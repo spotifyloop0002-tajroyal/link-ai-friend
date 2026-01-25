@@ -840,7 +840,7 @@ function detectIntent(message: string, uploadedImages?: string[]): { type: strin
     return { type: "post_now" };
   }
 
-  // Post with specific time
+  // Post with specific time - handles "post today at 12:20 pm", "post at 3pm", "schedule for tomorrow"
   const timePatterns = [
     /\d{1,2}:\d{2}\s*(am|pm)?/i,
     /\d{1,2}\s*(am|pm)/i,
@@ -856,8 +856,15 @@ function detectIntent(message: string, uploadedImages?: string[]): { type: strin
   
   const hasTime = timePatterns.some(pattern => pattern.test(lower));
   
-  if ((lower.includes("post it") || lower.includes("post this") || lower.includes("schedule")) && hasTime) {
-    return { type: "schedule_post", data: { timeText: message } };
+  // Match: "post today at 12:20 pm", "post at 3pm", "post it at 5pm", "schedule for tomorrow"
+  const hasPostKeyword = /^post\b/i.test(lower) || 
+                          lower.includes("post it") || 
+                          lower.includes("post this") || 
+                          lower.includes("schedule") ||
+                          lower.includes("publish");
+  
+  if (hasPostKeyword && hasTime) {
+    return { type: "auto_schedule", data: { timeText: message } };
   }
 
   // Ask for time (post without time)
