@@ -207,7 +207,7 @@ const LinkedInConnectionPage = () => {
                       variant="outline"
                     >
                       <a
-                        href="https://chrome.google.com/webstore"
+                        href={import.meta.env.VITE_EXTENSION_STORE_URL || 'https://chrome.google.com/webstore'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="gap-2"

@@ -1,10 +1,18 @@
-// LinkedBot Extension Bridge v3
+// LinkedBot Extension Bridge v3.1
 // This script allows the Chrome extension to communicate with the React app
 // Extension calls these methods → Bridge dispatches events + notifies backend
 
+// Configuration
+const EXTENSION_CONFIG = {
+  version: '3.1',
+  supabaseUrl: 'https://glrgfnqdzwbpkcsoxsgd.supabase.co',
+  // Will be set when extension provides it during connection
+  officialExtensionId: null,
+};
+
 window.LinkedBotBridge = {
   // Version identifier
-  version: '3.0',
+  version: EXTENSION_CONFIG.version,
 
   // Called by extension when post is published successfully
   // CRITICAL: This updates the posts table and triggers UI refresh
@@ -175,7 +183,6 @@ window.LinkedBotBridge = {
   notifyPostSuccess: async function(data) {
     console.log('🔗 Bridge: notifyPostSuccess called with:', JSON.stringify(data));
     try {
-      const supabaseUrl = 'https://glrgfnqdzwbpkcsoxsgd.supabase.co';
       const payload = {
         postId: data.postId,
         trackingId: data.trackingId,
@@ -187,7 +194,7 @@ window.LinkedBotBridge = {
       
       console.log('🔗 Bridge: Sending to sync-post:', JSON.stringify(payload));
       
-      const response = await fetch(`${supabaseUrl}/functions/v1/sync-post`, {
+      const response = await fetch(`${EXTENSION_CONFIG.supabaseUrl}/functions/v1/sync-post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -214,8 +221,7 @@ window.LinkedBotBridge = {
   // Notify backend of failed post
   notifyPostFailure: async function(data) {
     try {
-      const supabaseUrl = 'https://glrgfnqdzwbpkcsoxsgd.supabase.co';
-      const response = await fetch(`${supabaseUrl}/functions/v1/sync-post`, {
+      const response = await fetch(`${EXTENSION_CONFIG.supabaseUrl}/functions/v1/sync-post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -311,7 +317,24 @@ window.LinkedBotBridge = {
         message: `⏰ Alarm: ${data.alarmName}`
       }
     }, '*');
+  },
+  
+  // NEW: Set official extension ID for validation
+  setOfficialExtensionId: function(id) {
+    EXTENSION_CONFIG.officialExtensionId = id;
+    console.log('🔗 Bridge: Official extension ID set:', id);
+  },
+  
+  // NEW: Validate extension ID
+  isOfficialExtension: function(id) {
+    if (!EXTENSION_CONFIG.officialExtensionId) return true; // Not configured, allow all
+    return id === EXTENSION_CONFIG.officialExtensionId;
+  },
+  
+  // NEW: Get bridge version
+  getVersion: function() {
+    return EXTENSION_CONFIG.version;
   }
 };
 
-console.log('✅ LinkedBot Bridge Ready - v3');
+console.log('✅ LinkedBot Bridge Ready - v' + EXTENSION_CONFIG.version);

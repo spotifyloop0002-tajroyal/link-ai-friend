@@ -167,7 +167,14 @@ export const useExtensionEvents = () => {
           message: '❌ Extension disconnected',
         }));
         
-        toast.warning('Extension Disconnected');
+        toast.warning('Extension Disconnected', {
+          description: 'Please refresh the page and reconnect',
+          action: {
+            label: 'Refresh',
+            onClick: () => window.location.reload(),
+          },
+          duration: 10000,
+        });
       }
       
       // Extension events with detailed status updates

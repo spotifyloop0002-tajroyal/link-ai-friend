@@ -118,7 +118,7 @@ export const ExtensionStatus: React.FC = () => {
                 Install the Chrome extension to automatically post your scheduled content to LinkedIn.
               </p>
               <Button
-                onClick={() => window.open('https://chrome.google.com/webstore/YOUR_EXTENSION_ID', '_blank')}
+                onClick={() => window.open(import.meta.env.VITE_EXTENSION_STORE_URL || 'https://chrome.google.com/webstore', '_blank')}
               >
                 <Download className="w-4 h-4 mr-2" />
                 Install Extension
