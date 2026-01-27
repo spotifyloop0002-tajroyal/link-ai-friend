@@ -1,7 +1,56 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
+// Event types from the Chrome extension
+export type ExtensionEventType = 
+  | 'postScheduled'
+  | 'postStarting'
+  | 'postFilling'
+  | 'postPublished'
+  | 'postSuccess'
+  | 'postFailed'
+  | 'postUrlFailed'
+  | 'postRetrying'
+  | 'queueUpdated'
+  | 'analyticsUpdated'
+  | 'alarmFired'
+  | 'extensionConnected'
+  | 'extensionDisconnected';
+
+export interface ExtensionEventData {
+  postId?: string;
+  trackingId?: string;
+  message?: string;
+  error?: string;
+  linkedinUrl?: string;
+  scheduledTime?: string;
+  queueLength?: number;
+  retryIn?: string;
+  analytics?: {
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+  };
+}
+
+export interface PostStatusInfo {
+  status: 'draft' | 'scheduled' | 'posting' | 'posted' | 'failed' | 'verifying';
+  message: string;
+  linkedinUrl?: string;
+  scheduledTime?: string;
+  timestamp: Date;
+}
+
+export interface ExtensionStatus {
+  connected: boolean;
+  lastEvent: { event: ExtensionEventType; data: ExtensionEventData } | null;
+  message: string | null;
+  postStatuses: Record<string, PostStatusInfo>;
+}
+
+// Legacy event interfaces for backward compatibility
 interface PostPublishedEvent {
   trackingId?: string;
   postId?: string;
@@ -46,22 +95,221 @@ interface ErrorEvent {
 }
 
 /**
- * Global hook to listen for Chrome extension events
- * Invalidates react-query caches and shows toasts on extension actions
+ * Enhanced hook to listen for Chrome extension events
+ * Provides real-time status updates and invalidates react-query caches
  */
 export const useExtensionEvents = () => {
   const queryClient = useQueryClient();
+  
+  const [status, setStatus] = useState<ExtensionStatus>({
+    connected: false,
+    lastEvent: null,
+    message: null,
+    postStatuses: {},
+  });
+
+  // Update post status helper
+  const updatePostStatus = useCallback((
+    postId: string, 
+    statusInfo: Partial<PostStatusInfo>
+  ) => {
+    setStatus(prev => ({
+      ...prev,
+      postStatuses: {
+        ...prev.postStatuses,
+        [postId]: {
+          ...prev.postStatuses[postId],
+          ...statusInfo,
+          timestamp: new Date(),
+        } as PostStatusInfo,
+      },
+    }));
+  }, []);
+
+  // Clear post status
+  const clearPostStatus = useCallback((postId: string) => {
+    setStatus(prev => {
+      const newStatuses = { ...prev.postStatuses };
+      delete newStatuses[postId];
+      return { ...prev, postStatuses: newStatuses };
+    });
+  }, []);
+
+  // Clear all statuses
+  const clearAllStatuses = useCallback(() => {
+    setStatus(prev => ({ ...prev, postStatuses: {} }));
+  }, []);
 
   useEffect(() => {
-    // Listen for post published - CRITICAL for status update
+    // Handler for new postMessage-based events from webapp-content.js
+    const handleWindowMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      
+      const message = event.data;
+      
+      // Connection status messages
+      if (message.type === 'EXTENSION_CONNECTED') {
+        setStatus(prev => ({
+          ...prev,
+          connected: true,
+          message: '✅ Extension connected',
+        }));
+        
+        toast.success('Extension Connected', {
+          description: 'LinkedIn extension is ready',
+        });
+      }
+      
+      if (message.type === 'EXTENSION_DISCONNECTED') {
+        setStatus(prev => ({
+          ...prev,
+          connected: false,
+          message: '❌ Extension disconnected',
+        }));
+        
+        toast.warning('Extension Disconnected');
+      }
+      
+      // Extension events with detailed status updates
+      if (message.type === 'EXTENSION_EVENT') {
+        const { event, data } = message as { event: ExtensionEventType; data: ExtensionEventData };
+        
+        console.log(`[Extension Event] ${event}:`, data);
+        
+        setStatus(prev => ({
+          ...prev,
+          lastEvent: { event, data },
+          message: data.message || null,
+        }));
+        
+        // Handle specific events
+        const postId = data.postId || data.trackingId;
+        
+        if (postId) {
+          switch (event) {
+            case 'postScheduled':
+              updatePostStatus(postId, {
+                status: 'scheduled',
+                message: data.message || `Scheduled for ${data.scheduledTime}`,
+                scheduledTime: data.scheduledTime,
+              });
+              toast.success('Post Scheduled', {
+                description: data.message,
+              });
+              break;
+              
+            case 'postStarting':
+              updatePostStatus(postId, {
+                status: 'posting',
+                message: data.message || '⏰ Time to post!',
+              });
+              toast.info('Posting Started', {
+                description: data.message || 'Starting to post to LinkedIn...',
+              });
+              break;
+              
+            case 'postFilling':
+              updatePostStatus(postId, {
+                status: 'posting',
+                message: data.message || '📝 Filling content...',
+              });
+              break;
+              
+            case 'postPublished':
+              updatePostStatus(postId, {
+                status: 'posting',
+                message: data.message || '✅ Posted! Getting URL...',
+              });
+              break;
+              
+            case 'postSuccess':
+              updatePostStatus(postId, {
+                status: 'posted',
+                message: data.message || 'Posted successfully!',
+                linkedinUrl: data.linkedinUrl,
+              });
+              
+              // Invalidate queries
+              queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
+              queryClient.invalidateQueries({ queryKey: ['scheduled-posts'], refetchType: 'all' });
+              
+              toast.success('Posted Successfully!', {
+                description: 'Your post is live on LinkedIn',
+                action: data.linkedinUrl ? {
+                  label: 'View Post',
+                  onClick: () => window.open(data.linkedinUrl, '_blank'),
+                } : undefined,
+              });
+              break;
+              
+            case 'postFailed':
+              updatePostStatus(postId, {
+                status: 'failed',
+                message: data.message || data.error || 'Post failed',
+              });
+              
+              queryClient.invalidateQueries({ queryKey: ['posts'] });
+              
+              toast.error('Post Failed', {
+                description: data.message || data.error,
+              });
+              break;
+              
+            case 'postUrlFailed':
+              updatePostStatus(postId, {
+                status: 'verifying',
+                message: data.message || 'Posted but URL extraction failed',
+              });
+              
+              toast.warning('Posted (No URL)', {
+                description: 'Post created but couldn\'t get URL. Check LinkedIn manually.',
+              });
+              break;
+              
+            case 'postRetrying':
+              toast.info('Retrying Post', {
+                description: `Will retry in ${data.retryIn}`,
+              });
+              break;
+          }
+        }
+        
+        // Handle non-post events
+        if (event === 'queueUpdated') {
+          toast.info('Queue Updated', {
+            description: data.message || `${data.queueLength} posts in queue`,
+          });
+        }
+        
+        if (event === 'analyticsUpdated') {
+          console.log('Analytics updated:', data);
+          queryClient.invalidateQueries({ queryKey: ['analytics'] });
+          queryClient.invalidateQueries({ queryKey: ['linkedin-analytics'] });
+        }
+        
+        if (event === 'alarmFired') {
+          console.log('Extension alarm fired:', data);
+        }
+      }
+    };
+
+    // Legacy event handlers (for backward compatibility with extension-bridge.js)
     const handlePostPublished = (event: CustomEvent<PostPublishedEvent>) => {
       const { postId, trackingId, linkedinUrl } = event.detail;
       
       console.log('✅ Extension Event: Post published', { postId, trackingId, linkedinUrl });
       console.log('🔄 Invalidating all cached queries to re-fetch from database...');
       
-      // Force immediate refetch from database - NOT relying on local state
-      // Use refetchType: 'all' to ensure data is fetched fresh
+      const id = postId || trackingId;
+      if (id) {
+        updatePostStatus(id, {
+          status: 'posted',
+          message: 'Published to LinkedIn',
+          linkedinUrl,
+        });
+      }
+      
+      // Force immediate refetch from database
       queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['scheduled-posts'], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
@@ -69,7 +317,7 @@ export const useExtensionEvents = () => {
       queryClient.invalidateQueries({ queryKey: ['user-profile'], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['notifications'], refetchType: 'all' });
       
-      // Also refetch after a short delay to ensure DB has updated
+      // Secondary refetch after delay
       setTimeout(() => {
         console.log('🔄 Secondary refetch after 1s delay');
         queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
@@ -85,11 +333,18 @@ export const useExtensionEvents = () => {
       });
     };
 
-    // Listen for post failed
     const handlePostFailed = (event: CustomEvent<PostFailedEvent>) => {
-      const { postId, error } = event.detail;
+      const { postId, trackingId, error } = event.detail;
       
       console.log('❌ Extension Event: Post failed', { postId, error });
+      
+      const id = postId || trackingId;
+      if (id) {
+        updatePostStatus(id, {
+          status: 'failed',
+          message: error || 'Failed to publish',
+        });
+      }
       
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-posts'] });
@@ -99,7 +354,6 @@ export const useExtensionEvents = () => {
       });
     };
 
-    // Listen for analytics update
     const handleAnalyticsUpdated = (event: CustomEvent<AnalyticsUpdatedEvent>) => {
       console.log('📊 Extension Event: Analytics updated');
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
@@ -107,7 +361,6 @@ export const useExtensionEvents = () => {
       queryClient.invalidateQueries({ queryKey: ['linkedin-analytics'] });
     };
 
-    // Listen for profile scraped
     const handleProfileScraped = (event: CustomEvent<ProfileScrapedEvent>) => {
       console.log('👤 Extension Event: Profile scraped');
       queryClient.invalidateQueries({ queryKey: ['linkedin-profile'] });
@@ -116,10 +369,15 @@ export const useExtensionEvents = () => {
       toast.success('Profile data refreshed!');
     };
 
-    // Listen for connection status changes
     const handleConnectionChanged = (event: CustomEvent<ConnectionChangedEvent>) => {
       const { connected } = event.detail;
       console.log('🔗 Extension Event: Connection', connected ? 'connected' : 'disconnected');
+      
+      setStatus(prev => ({
+        ...prev,
+        connected,
+        message: connected ? '✅ Extension connected' : '❌ Extension disconnected',
+      }));
       
       if (connected) {
         toast.success('Extension connected!');
@@ -128,14 +386,16 @@ export const useExtensionEvents = () => {
       }
     };
 
-    // Listen for errors
     const handleError = (event: CustomEvent<ErrorEvent>) => {
       const { message } = event.detail;
       console.error('❌ Extension Event: Error', message);
       toast.error(message || 'An error occurred with the extension');
     };
 
-    // Register all event listeners
+    // Register window message listener for new events
+    window.addEventListener('message', handleWindowMessage);
+    
+    // Register legacy event listeners
     window.addEventListener('linkedbot:post-published', handlePostPublished as EventListener);
     window.addEventListener('linkedbot:post-failed', handlePostFailed as EventListener);
     window.addEventListener('linkedbot:analytics-updated', handleAnalyticsUpdated as EventListener);
@@ -144,6 +404,7 @@ export const useExtensionEvents = () => {
     window.addEventListener('linkedbot:error', handleError as EventListener);
 
     return () => {
+      window.removeEventListener('message', handleWindowMessage);
       window.removeEventListener('linkedbot:post-published', handlePostPublished as EventListener);
       window.removeEventListener('linkedbot:post-failed', handlePostFailed as EventListener);
       window.removeEventListener('linkedbot:analytics-updated', handleAnalyticsUpdated as EventListener);
@@ -151,5 +412,12 @@ export const useExtensionEvents = () => {
       window.removeEventListener('linkedbot:connection-changed', handleConnectionChanged as EventListener);
       window.removeEventListener('linkedbot:error', handleError as EventListener);
     };
-  }, [queryClient]);
+  }, [queryClient, updatePostStatus]);
+
+  return {
+    ...status,
+    updatePostStatus,
+    clearPostStatus,
+    clearAllStatuses,
+  };
 };

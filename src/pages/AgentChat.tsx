@@ -25,9 +25,11 @@ import { usePostingLimits } from "@/hooks/usePostingLimits";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
+import { ExtensionStatusIndicator } from "@/components/extension/ExtensionStatusIndicator";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useImageUpload } from "@/hooks/useImageUpload";
+import { useExtensionEvents } from "@/hooks/useExtensionEvents";
 import { supabase } from "@/integrations/supabase/client";
 import { PostStatus } from "@/lib/postLifecycle";
 
@@ -107,6 +109,9 @@ const AgentChatPage = () => {
     isConnected: isExtensionConnected,
     sendPendingPosts,
   } = useLinkedBotExtension();
+
+  // Enhanced extension events with real-time status
+  const extensionStatus = useExtensionEvents();
 
   const [isPostingNow, setIsPostingNow] = useState(false);
 
@@ -551,15 +556,15 @@ const AgentChatPage = () => {
                   </div>
                 </ScrollArea>
 
-                {/* Extension Status - Post Now buttons REMOVED (agent-driven) */}
-                {!isExtensionConnected && (
-                  <div className="border-t border-border pt-4 mt-4">
-                    <span className="text-sm text-amber-500 flex items-center gap-2">
-                      <Linkedin className="w-4 h-4" />
-                      Extension not connected - connect to enable posting
-                    </span>
-                  </div>
-                )}
+                {/* Extension Status Indicator with real-time updates */}
+                <div className="border-t border-border pt-3 mt-3">
+                  <ExtensionStatusIndicator
+                    connected={isExtensionConnected || extensionStatus.connected}
+                    message={extensionStatus.message}
+                    postStatuses={extensionStatus.postStatuses}
+                    compact={Object.keys(extensionStatus.postStatuses).length === 0}
+                  />
+                </div>
 
                 {/* Extension Activity Log */}
                 <div className="border-t border-border pt-3 mt-3 h-[140px]">
