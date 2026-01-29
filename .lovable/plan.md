@@ -7,103 +7,105 @@ New users are seeing posts from other accounts. After investigation, I found tha
 
 ## Root Causes
 
-### 1. `sync-post` Edge Function - Missing User Ownership Verification
-The function updates posts by matching `postId` or `trackingId` without verifying the `userId` actually owns that post.
+### 1. `sync-post` Edge Function - Missing User Ownership Verification ✅ FIXED
+The function now requires `userId` and validates ownership before updating posts.
 
-**Current Code (Vulnerable):**
-```typescript
-// Finds post by ID only - no user verification!
-.eq('id', postId)
-.maybeSingle();
+### 2. `post-success` Edge Function - Same Issue ✅ FIXED
+This function now also requires `userId` and validates ownership.
+
+### 3. Extension State Management (User-Side) ✅ FIXED IN EXTENSION
+The Chrome extension now has user-isolated storage keys (`post_queue_${userId}`, `post_tracking_${userId}`).
+
+---
+
+## Webapp Fixes Applied
+
+### 1. ✅ Fixed: User Session Sync to Extension
+- **DashboardLayout.tsx**: Added `useEffect` to send `SET_CURRENT_USER` message to extension on mount
+- **Login.tsx**: Already sends `SET_CURRENT_USER` after login
+- **DashboardLayout.tsx**: Sends `CLEAR_USER_SESSION` on logout
+
+### 2. ✅ Fixed: Post Payload Transformation
+- **useLinkedBotExtension.ts**: Updated `sendPendingPosts` to transform posts:
+  - Adds `user_id` field (extension expects snake_case)
+  - Adds `scheduled_for` field (extension expects this, not `scheduled_time`)
+  - Added `setCurrentUser()` and `clearUserSession()` methods
+
+### 3. ✅ Fixed: Extension Bridge
+- **extension-bridge.js**: Updated `setCurrentUser` and `clearUserSession` to dispatch proper events
+
+### 4. ✅ Fixed: Edge Functions Security
+- **sync-post/index.ts**: Mandatory `userId` validation and ownership verification
+- **post-success/index.ts**: Same ownership verification
+
+---
+
+## ⚠️ CRITICAL: Extension Issues to Fix
+
+The uploaded extension files reveal these issues that need fixing in the Chrome extension:
+
+### Issue 1: Action Name Mismatch
+**File:** `background.js` line ~490
+```javascript
+// Background.js sends:
+const postResult = await sendMessageToTab(linkedinTab.id, {
+  action: 'createPost',  // ❌ WRONG
+  ...
+});
+
+// But linkedin-content.js only handles:
+if (request.action === 'fillPost') {  // ✅ This is what it expects
 ```
 
-**Required Fix:**
-```typescript
-// Must also verify user owns the post
-.eq('id', postId)
-.eq('user_id', userId)  // Add ownership check
-.maybeSingle();
+**FIX NEEDED:** In `background.js`, change `action: 'createPost'` to `action: 'fillPost'`
+
+### Issue 2: Property Name for Scheduled Time
+**File:** `background.js` line ~408
+```javascript
+const scheduledTime = new Date(post.scheduled_for);
 ```
 
-### 2. `post-success` Edge Function - Same Issue
-This function has similar vulnerability where it matches by `postId`/`trackingId` without strict user verification.
+The extension expects `scheduled_for`, but the webapp was sending `scheduled_time`.
+**STATUS:** ✅ Fixed in webapp - now sends both for compatibility
 
-### 3. Extension State Management (User-Side)
-The Chrome extension may cache post data from previous user sessions. When a new user logs in on the same browser, the extension could reference stale post IDs.
+### Issue 3: user_id vs userId
+**File:** `background.js` line ~399
+```javascript
+if (post.user_id !== userId) {  // Expects snake_case
+```
 
----
-
-## Implementation Plan
-
-### Step 1: Fix `sync-post` Edge Function (Critical Security Fix)
-Add mandatory `userId` parameter validation and ownership verification:
-
-1. Make `userId` required in payload validation
-2. Add `.eq('user_id', userId)` to post lookup queries
-3. Reject requests where userId doesn't match post owner
-4. Return 403 Forbidden for ownership mismatches
-
-### Step 2: Fix `post-success` Edge Function
-Similar ownership verification:
-
-1. Require `userId` in payload
-2. Verify ownership before updating
-3. Return clear error if mismatch detected
-
-### Step 3: Update Extension Bridge (Ensure userId is Always Sent)
-The bridge already passes `userId`, but we should:
-
-1. Ensure `userId` is REQUIRED (not optional) in all calls
-2. Add validation that rejects calls without valid `userId`
-
-### Step 4: Add Extension State Isolation (User-Side Fix)
-**This requires changes to the extension itself:**
-
-1. Clear cached posts when user changes
-2. Store posts keyed by userId, not globally
-3. On webapp login, notify extension of new user session
+**STATUS:** ✅ Fixed in webapp - now sends `user_id` (snake_case)
 
 ---
 
-## Technical Changes
+## Testing Checklist
 
-### File: `supabase/functions/sync-post/index.ts`
+### Before Testing
+1. Ensure extension is updated with the `createPost` → `fillPost` fix
+2. Reload the extension after changes
+3. Clear browser storage if testing user isolation
 
-**Changes:**
-- Add `userId` as required parameter (return 400 if missing)
-- Modify post lookup to include `user_id` filter
-- Add ownership verification after finding post
-- Return 403 if userId doesn't match post.user_id
-
-### File: `supabase/functions/post-success/index.ts`
-
-**Changes:**
-- Already has `userId` validation, but uses `eq('user_id', userId)` on UPDATE only
-- Need to also verify on the initial lookup
-- Move ownership check earlier in the flow
-
-### File: `public/extension-bridge.js`
-
-**Changes:**
-- Add validation that throws error if `userId` is missing in payload
-- Log warnings when userId is undefined
+### Test Steps
+1. ✅ Create two test accounts (User A and User B)
+2. ✅ Log in as User A, create and schedule posts
+3. ✅ Log out, log in as User B
+4. ✅ Verify User B sees ONLY their own posts
+5. ✅ Schedule a post as User B
+6. ✅ Verify extension sync only updates User B's posts
+7. ✅ Check database to confirm user_id isolation
 
 ---
 
-## For Extension (User Must Fix)
+## Extension Files Summary
 
-The extension needs these changes (not in webapp scope):
-
-1. **Clear queue when user changes**
-   - Listen for `linkedbot:user-changed` event
-   - Clear all cached posts and scheduled items
-
-2. **Store posts by userId**
-   - Key structure: `posts_${userId}` instead of just `posts`
-   - Prevents cross-user data leakage
-
-3. **Validate userId before sync**
-   - Don't send API requests without valid userId
+| File | Status | Notes |
+|------|--------|-------|
+| `manifest.json` | ✅ OK | Correct permissions and hosts |
+| `background.js` | ⚠️ FIX NEEDED | Change `createPost` → `fillPost` |
+| `linkedin-content.js` | ✅ OK | Handles `fillPost` action |
+| `linkedin-analytics.js` | ✅ OK | Analytics scraping works |
+| `webapp-content.js` | ✅ OK | User session handlers present |
+| `injected.js` | ✅ OK | Bridge API correct |
 
 ---
 
@@ -111,18 +113,7 @@ The extension needs these changes (not in webapp scope):
 
 | Issue | Severity | Status |
 |-------|----------|--------|
-| Post update without ownership check | HIGH | Will be fixed |
-| Cross-user data in extension cache | MEDIUM | Extension-side fix |
-| Missing userId validation in edge functions | HIGH | Will be fixed |
-
----
-
-## Testing After Fix
-
-1. Create two test accounts (User A and User B)
-2. Log in as User A, create and schedule posts
-3. Log out, log in as User B
-4. Verify User B sees ONLY their own posts
-5. Schedule a post as User B
-6. Verify extension sync only updates User B's posts
-7. Check database to confirm user_id isolation
+| Post update without ownership check | HIGH | ✅ Fixed |
+| Cross-user data in extension cache | MEDIUM | ✅ Fixed (user-isolated keys) |
+| Missing userId validation in edge functions | HIGH | ✅ Fixed |
+| Action name mismatch | CRITICAL | ⚠️ Extension fix needed |

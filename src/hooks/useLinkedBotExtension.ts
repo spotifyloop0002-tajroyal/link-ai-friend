@@ -105,7 +105,7 @@ export const useLinkedBotExtension = () => {
   }, []);
 
   // Send pending posts to extension
-  const sendPendingPosts = useCallback(async (posts: Post[]): Promise<{ success: boolean; error?: string; queueLength?: number }> => {
+  const sendPendingPosts = useCallback(async (posts: Post[], userId?: string): Promise<{ success: boolean; error?: string; queueLength?: number }> => {
     if (typeof window.LinkedBotExtension === 'undefined') {
       return { success: false, error: 'Extension not installed. Please install the Chrome extension first.' };
     }
@@ -145,10 +145,21 @@ export const useLinkedBotExtension = () => {
         };
       }
 
-      console.log('📤 Calling extension method:', fnName, 'with posts:', posts);
+      // 🔒 Transform posts to match extension's expected format
+      // Extension expects: user_id, scheduled_for (not scheduled_time)
+      const transformedPosts = posts.map(post => ({
+        id: post.id,
+        user_id: userId || (post as any).user_id, // 🔒 Include user_id for ownership verification
+        content: post.content,
+        photo_url: post.photo_url,
+        scheduled_for: post.scheduled_time, // 🔒 Extension expects scheduled_for not scheduled_time
+        scheduled_time: post.scheduled_time, // Keep both for compatibility
+      }));
+
+      console.log('📤 Calling extension method:', fnName, 'with posts:', transformedPosts);
       
       // Await the result if the function returns a promise
-      const result = await api[fnName](posts);
+      const result = await api[fnName](transformedPosts);
       console.log('📥 Extension response:', result);
       
       // Validate response
@@ -305,6 +316,23 @@ export const useLinkedBotExtension = () => {
     }
   }, [status.isInstalled, status.isConnected, connectExtension]);
 
+  // 🔒 NEW: Set current user in extension (for data isolation)
+  const setCurrentUser = useCallback((userId: string) => {
+    console.log('🔒 Setting current user in extension:', userId);
+    window.postMessage({
+      type: 'SET_CURRENT_USER',
+      userId: userId
+    }, '*');
+  }, []);
+
+  // 🔒 NEW: Clear user session on logout
+  const clearUserSession = useCallback(() => {
+    console.log('🔒 Clearing user session in extension');
+    window.postMessage({
+      type: 'CLEAR_USER_SESSION'
+    }, '*');
+  }, []);
+
   return {
     ...status,
     isLoading,
@@ -313,6 +341,8 @@ export const useLinkedBotExtension = () => {
     sendPendingPosts,
     postNow,
     checkExtension,
+    setCurrentUser, // 🔒 NEW
+    clearUserSession, // 🔒 NEW
   };
 };
 

@@ -339,19 +339,35 @@ window.LinkedBotBridge = {
   // NEW: Set current user for data isolation
   setCurrentUser: function(userId) {
     console.log('🔗 Bridge: Setting current user:', userId);
+    
+    // Method 1: Dispatch custom event for extension's webapp-content.js to pick up
+    window.dispatchEvent(new CustomEvent('linkedbot:user-changed', {
+      detail: { userId: userId }
+    }));
+    
+    // Method 2: PostMessage for webapp-content.js message listener
     window.postMessage({
-      type: 'SET_CURRENT_USER_INTERNAL',
+      type: 'SET_CURRENT_USER',
       userId: userId
     }, '*');
+    
     return { success: true };
   },
   
   // NEW: Clear user session on logout
   clearUserSession: function() {
     console.log('🔗 Bridge: Clearing user session');
+    
+    // Method 1: Dispatch custom event
+    window.dispatchEvent(new CustomEvent('linkedbot:user-logout', {
+      detail: {}
+    }));
+    
+    // Method 2: PostMessage
     window.postMessage({
-      type: 'CLEAR_USER_SESSION_INTERNAL'
+      type: 'CLEAR_USER_SESSION'
     }, '*');
+    
     return { success: true };
   }
 };
