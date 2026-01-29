@@ -96,6 +96,12 @@ const Login = () => {
       if (error) throw error;
 
       if (data.user) {
+        // Notify extension of logged in user for data isolation
+        window.postMessage({
+          type: 'SET_CURRENT_USER',
+          userId: data.user.id
+        }, '*');
+        
         toast({
           title: "Account created!",
           description: "Welcome to LinkedBot. Let's set up your account.",
@@ -126,12 +132,20 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
       if (error) throw error;
+
+      // Notify extension of logged in user for data isolation
+      if (data.user) {
+        window.postMessage({
+          type: 'SET_CURRENT_USER',
+          userId: data.user.id
+        }, '*');
+      }
     } catch (error) {
       console.error('Login error:', error);
       toast({

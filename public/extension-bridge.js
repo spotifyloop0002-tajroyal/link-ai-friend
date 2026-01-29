@@ -334,7 +334,62 @@ window.LinkedBotBridge = {
   // NEW: Get bridge version
   getVersion: function() {
     return EXTENSION_CONFIG.version;
+  },
+  
+  // NEW: Set current user for data isolation
+  setCurrentUser: function(userId) {
+    console.log('🔗 Bridge: Setting current user:', userId);
+    window.postMessage({
+      type: 'SET_CURRENT_USER_INTERNAL',
+      userId: userId
+    }, '*');
+    return { success: true };
+  },
+  
+  // NEW: Clear user session on logout
+  clearUserSession: function() {
+    console.log('🔗 Bridge: Clearing user session');
+    window.postMessage({
+      type: 'CLEAR_USER_SESSION_INTERNAL'
+    }, '*');
+    return { success: true };
   }
 };
+
+// Listen for user session management messages from webapp
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  
+  const message = event.data;
+  
+  if (message.type === 'SET_CURRENT_USER') {
+    console.log('👤 Bridge: Setting current user in extension:', message.userId);
+    
+    // Dispatch event for extension to pick up
+    window.dispatchEvent(new CustomEvent('linkedbot:user-changed', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.postMessage({
+      type: 'USER_SESSION_SET',
+      success: true,
+      userId: message.userId
+    }, '*');
+  }
+  
+  if (message.type === 'CLEAR_USER_SESSION') {
+    console.log('🧹 Bridge: Clearing user session in extension');
+    
+    // Dispatch event for extension to pick up
+    window.dispatchEvent(new CustomEvent('linkedbot:user-logout', {
+      detail: {}
+    }));
+    
+    window.postMessage({
+      type: 'USER_SESSION_CLEARED',
+      success: true
+    }, '*');
+  }
+});
 
 console.log('✅ LinkedBot Bridge Ready - v' + EXTENSION_CONFIG.version);

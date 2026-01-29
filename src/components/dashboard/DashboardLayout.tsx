@@ -65,6 +65,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   };
 
   const handleLogout = async () => {
+    // Clear extension data before logout for security
+    window.postMessage({ type: 'CLEAR_USER_SESSION' }, '*');
+    
     await supabase.auth.signOut();
     navigate("/login");
   };

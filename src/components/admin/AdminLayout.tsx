@@ -61,6 +61,9 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   }, []);
 
   const handleLogout = async () => {
+    // Clear extension data before logout for security
+    window.postMessage({ type: 'CLEAR_USER_SESSION' }, '*');
+    
     await supabase.auth.signOut();
     navigate("/admin/login");
   };
