@@ -49,6 +49,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
 import { AdminNotificationSender } from "@/components/admin/AdminNotificationSender";
+import { AdminAlertsDashboard } from "@/components/admin/AdminAlertsDashboard";
 
 interface AdminUser {
   id: string;
@@ -293,6 +294,15 @@ const AdminPage = () => {
               email: u.email 
             }))} 
           />
+        </motion.div>
+
+        {/* Extension Alerts Dashboard */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+        >
+          <AdminAlertsDashboard />
         </motion.div>
 
         {/* Filters */}

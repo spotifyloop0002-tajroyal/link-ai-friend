@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_alert_settings: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          receive_critical_alerts: boolean
+          receive_high_alerts: boolean
+          receive_medium_alerts: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          receive_critical_alerts?: boolean
+          receive_high_alerts?: boolean
+          receive_medium_alerts?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          receive_critical_alerts?: boolean
+          receive_high_alerts?: boolean
+          receive_medium_alerts?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agents: {
         Row: {
           created_at: string
@@ -106,6 +139,65 @@ export type Database = {
           value?: number
         }
         Relationships: []
+      }
+      extension_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          details: Json | null
+          email_sent: boolean
+          email_sent_at: string | null
+          id: string
+          is_resolved: boolean
+          message: string
+          post_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          details?: Json | null
+          email_sent?: boolean
+          email_sent_at?: string | null
+          id?: string
+          is_resolved?: boolean
+          message: string
+          post_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          details?: Json | null
+          email_sent?: boolean
+          email_sent_at?: string | null
+          id?: string
+          is_resolved?: boolean
+          message?: string
+          post_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extension_alerts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       linkedin_analytics: {
         Row: {

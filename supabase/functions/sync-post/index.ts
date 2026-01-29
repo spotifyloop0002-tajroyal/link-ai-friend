@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Create failure notification
+    // Create failure notification and send critical alert
     if (updateData.status === 'failed') {
       await supabaseClient.from('notifications').insert({
         user_id: payload.userId,
@@ -360,6 +360,40 @@ Deno.serve(async (req) => {
         message: payload.lastError || payload.error || 'Failed to publish your post. Please try again.',
         type: 'post',
       });
+
+      // Send critical alert to admins
+      const errorMessage = payload.lastError || payload.error || 'Unknown error';
+      const isLinkedInUIError = errorMessage.toLowerCase().includes('ui') || 
+                                 errorMessage.toLowerCase().includes('selector') ||
+                                 errorMessage.toLowerCase().includes('element not found');
+      
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        await fetch(`${supabaseUrl}/functions/v1/send-critical-alert`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            alertType: isLinkedInUIError ? 'linkedin_ui_changed' : 'posting_failed',
+            severity: isLinkedInUIError ? 'critical' : 'high',
+            title: isLinkedInUIError ? 'LinkedIn UI May Have Changed' : 'Post Publishing Failed',
+            message: `Post failed for user. Error: ${errorMessage}`,
+            details: {
+              postId: post.id,
+              trackingId: post.tracking_id,
+              scheduledTime: post.scheduled_time,
+              error: errorMessage,
+            },
+            userId: payload.userId,
+            postId: post.id,
+          }),
+        });
+        console.log('📧 Critical alert sent to admins');
+      } catch (alertError) {
+        console.error('Failed to send critical alert:', alertError);
+      }
     }
 
     return new Response(
