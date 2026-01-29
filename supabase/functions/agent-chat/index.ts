@@ -1192,6 +1192,11 @@ Or would you prefer different topics/timing?`;
       }
 
       case "post_now": {
+        console.log("🚀 POST_NOW intent - generatedPosts count:", generatedPosts?.length || 0);
+        if (generatedPosts?.length > 0) {
+          console.log("📋 First post content preview:", generatedPosts[0]?.content?.substring(0, 100));
+        }
+        
         if (!generatedPosts || generatedPosts.length === 0) {
           response = "I don't have any posts ready to publish. Would you like me to create one first?\n\nJust say 'write a post about [topic]' 📝";
         } else {
@@ -1200,6 +1205,9 @@ Or would you prefer different topics/timing?`;
           const now = new Date();
           // Schedule 1 minute from now for immediate posting
           const immediateTime = new Date(now.getTime() + 60 * 1000);
+          
+          console.log("✅ Preparing to send post to extension:", postToSchedule.id);
+          console.log("⏰ Scheduled time (immediate):", immediateTime.toISOString());
           
           response = `🚀 **Posting Now**\n\nSending your post to the Chrome extension for immediate publishing...\n\nPlease keep LinkedIn open in another tab.`;
           action = "post_now";

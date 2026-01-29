@@ -224,6 +224,13 @@ export function useAgentChat(
     setIsLoading(true);
 
     try {
+      // CRITICAL: Log what we're sending to edge function
+      console.log("🚀 Sending to edge function:", {
+        message,
+        generatedPostsCount: generatedPosts.length,
+        generatedPosts: generatedPosts.map(p => ({ id: p.id, content: p.content?.substring(0, 50) })),
+      });
+      
       const { data, error } = await supabase.functions.invoke("agent-chat", {
         body: {
           message,
@@ -271,8 +278,11 @@ export function useAgentChat(
 
       // If posts were generated, ADD them to generatedPosts with draft status
       // This allows "post now" and scheduling to work immediately
+      console.log("📦 Response data type:", data.type, "Posts count:", data.posts?.length);
+      
       if (data.type === "posts_generated" && data.posts?.length > 0) {
         console.log("📝 Adding generated posts to queue:", data.posts.length);
+        console.log("📝 Post content preview:", data.posts[0]?.content?.substring(0, 100));
         
         const newPosts: GeneratedPost[] = data.posts.map((p: any) => ({
           ...p,
@@ -283,8 +293,24 @@ export function useAgentChat(
         }));
         
         // Add to generated posts (prepend to show newest first)
-        setGeneratedPosts(prev => [...newPosts, ...prev]);
+        setGeneratedPosts(prev => {
+          const updated = [...newPosts, ...prev];
+          console.log("✅ Updated generatedPosts array, new count:", updated.length);
+          return updated;
+        });
         
+        toast.success(`📝 Post ready! Say "post now" or provide a time to schedule.`);
+      } else if (data.posts?.length > 0) {
+        // Posts generated but type isn't "posts_generated" - still add them
+        console.log("⚠️ Posts in response but type was:", data.type, "- adding anyway");
+        const newPosts: GeneratedPost[] = data.posts.map((p: any) => ({
+          ...p,
+          id: p.id || `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          status: 'draft' as PostStatus,
+          approved: false,
+          imageSkipped: false,
+        }));
+        setGeneratedPosts(prev => [...newPosts, ...prev]);
         toast.success(`📝 Post ready! Say "post now" or provide a time to schedule.`);
       }
 
