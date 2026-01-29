@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,40 +24,43 @@ function generateImagePromptFromPost(postContent: string): string {
   const lowerContent = postContent.toLowerCase();
   
   if (lowerContent.includes('ai') || lowerContent.includes('artificial intelligence')) {
-    themes.push('artificial intelligence, neural networks');
+    themes.push('artificial intelligence, neural networks, futuristic technology');
   }
   if (lowerContent.includes('car') || lowerContent.includes('automotive') || lowerContent.includes('vehicle')) {
-    themes.push('automotive industry, vehicles');
+    themes.push('automotive industry, modern vehicles');
   }
   if (lowerContent.includes('tech') || lowerContent.includes('software') || lowerContent.includes('code')) {
-    themes.push('technology, digital innovation');
+    themes.push('technology, digital innovation, software');
   }
   if (lowerContent.includes('leader') || lowerContent.includes('leadership')) {
-    themes.push('leadership, business excellence');
+    themes.push('leadership, business excellence, professional');
   }
   if (lowerContent.includes('health') || lowerContent.includes('medical')) {
     themes.push('healthcare, medical technology');
   }
   if (lowerContent.includes('future') || lowerContent.includes('innovation')) {
-    themes.push('futuristic, cutting-edge');
+    themes.push('futuristic, cutting-edge, modern');
   }
   if (lowerContent.includes('electric') || lowerContent.includes('ev') || lowerContent.includes('battery')) {
-    themes.push('electric vehicles, sustainability');
+    themes.push('electric vehicles, green energy, sustainability');
   }
   if (lowerContent.includes('autonomous') || lowerContent.includes('self-driving')) {
-    themes.push('autonomous technology, robotics');
+    themes.push('autonomous technology, robotics, automation');
+  }
+  if (lowerContent.includes('data') || lowerContent.includes('analytics') || lowerContent.includes('dashboard')) {
+    themes.push('data visualization, analytics dashboard, charts');
+  }
+  if (lowerContent.includes('sales') || lowerContent.includes('marketing')) {
+    themes.push('sales growth, marketing, business charts');
+  }
+  if (lowerContent.includes('team') || lowerContent.includes('collaboration')) {
+    themes.push('teamwork, collaboration, diverse professionals');
   }
   
   const themeString = themes.length > 0 ? themes.join(', ') : 'professional business, corporate';
   
-  return `Create a professional LinkedIn social media post image.
-Topic: ${cleanTopic}
-Visual themes: ${themeString}
-Style: Modern, business professional, clean and polished design
-Colors: Professional blue tones (#0A66C2), white backgrounds, subtle gradients
-Layout: Clean composition with visual elements representing the topic
-Format: Optimized for LinkedIn feed (1200x630 aspect ratio conceptually)
-Requirements: NO TEXT OVERLAY, visually represent the concept through abstract shapes, icons, or professional imagery. Minimalist but impactful.`;
+  // Create a prompt optimized for Hugging Face Stable Diffusion models
+  return `Professional LinkedIn post image, ${cleanTopic}, ${themeString}, modern clean design, high quality, 4k, professional photography style, corporate aesthetic, blue and white color scheme, minimalist, no text overlay`;
 }
 
 serve(async (req) => {
@@ -70,68 +74,172 @@ serve(async (req) => {
       postContent: string;
     };
 
+    const HUGGINGFACE_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
+    
     // Generate intelligent image prompt from actual post content if not provided
     const imagePrompt = prompt || generateImagePromptFromPost(postContent);
+    console.log("📝 Using image prompt:", imagePrompt.substring(0, 200));
 
-    console.log("Using image prompt:", imagePrompt.substring(0, 200));
+    let imageBase64: string | null = null;
+    let imageUrl: string | null = null;
 
-    console.log("Generating image with prompt:", imagePrompt.substring(0, 100));
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages: [
+    // Try Hugging Face first if API key is available
+    if (HUGGINGFACE_API_KEY) {
+      console.log("🎨 Generating image with Hugging Face...");
+      
+      try {
+        // Using Stable Diffusion XL for high quality images
+        const hfResponse = await fetch(
+          "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
           {
-            role: "user",
-            content: imagePrompt
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${HUGGINGFACE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              inputs: imagePrompt,
+              parameters: {
+                width: 1024,
+                height: 1024,
+                num_inference_steps: 30,
+                guidance_scale: 7.5,
+              },
+            }),
           }
-        ],
-        modalities: ["image", "text"]
-      }),
-    });
+        );
 
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded. Please wait a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        if (hfResponse.ok) {
+          const contentType = hfResponse.headers.get("content-type");
+          
+          if (contentType?.includes("image")) {
+            // Response is binary image data
+            const arrayBuffer = await hfResponse.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Convert to base64
+            let binary = '';
+            for (let i = 0; i < uint8Array.length; i++) {
+              binary += String.fromCharCode(uint8Array[i]);
+            }
+            imageBase64 = btoa(binary);
+            
+            console.log("✅ Hugging Face image generated successfully");
+            
+            // Upload to Supabase Storage for persistence
+            const supabaseUrl = Deno.env.get("SUPABASE_URL");
+            const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+            
+            if (supabaseUrl && supabaseKey) {
+              const supabase = createClient(supabaseUrl, supabaseKey);
+              
+              const fileName = `hf-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+              
+              const { data: uploadData, error: uploadError } = await supabase.storage
+                .from("post-images")
+                .upload(fileName, uint8Array, {
+                  contentType: "image/png",
+                  upsert: false,
+                });
+              
+              if (!uploadError && uploadData) {
+                const { data: publicUrl } = supabase.storage
+                  .from("post-images")
+                  .getPublicUrl(fileName);
+                
+                imageUrl = publicUrl.publicUrl;
+                console.log("✅ Image uploaded to storage:", imageUrl);
+              } else {
+                console.warn("⚠️ Failed to upload to storage:", uploadError);
+                // Fall back to base64 data URL
+                imageUrl = `data:image/png;base64,${imageBase64}`;
+              }
+            } else {
+              // No storage configured, use base64
+              imageUrl = `data:image/png;base64,${imageBase64}`;
+            }
+          } else {
+            // Response might be JSON (error or loading message)
+            const jsonResponse = await hfResponse.json();
+            console.warn("⚠️ Hugging Face returned non-image response:", jsonResponse);
+            
+            // Check if model is loading
+            if (jsonResponse.error?.includes("loading")) {
+              console.log("⏳ Model is loading, falling back to Lovable AI...");
+            }
+          }
+        } else {
+          const errorText = await hfResponse.text();
+          console.error("❌ Hugging Face API error:", hfResponse.status, errorText);
+          
+          if (hfResponse.status === 429) {
+            console.log("⚠️ Rate limited, falling back to Lovable AI...");
+          }
+        }
+      } catch (hfError) {
+        console.error("❌ Hugging Face request failed:", hfError);
       }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits low. Please add credits." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await response.text();
-      console.error("Image generation failed:", status, errorText);
-      throw new Error(`Image generation failed: ${status}`);
     }
 
-    const data = await response.json();
-    
-    // Extract image from response
-    const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    
-    if (!imageData) {
-      console.error("No image in response:", JSON.stringify(data).substring(0, 500));
-      throw new Error("No image generated");
+    // Fallback to Lovable AI if Hugging Face didn't work
+    if (!imageUrl && LOVABLE_API_KEY) {
+      console.log("🔄 Falling back to Lovable AI Gateway...");
+      
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-pro-image-preview",
+          messages: [
+            {
+              role: "user",
+              content: imagePrompt
+            }
+          ],
+          modalities: ["image", "text"]
+        }),
+      });
+
+      if (!response.ok) {
+        const status = response.status;
+        if (status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limits exceeded. Please wait a moment." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (status === 402) {
+          return new Response(JSON.stringify({ error: "AI credits low. Please add credits." }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const errorText = await response.text();
+        console.error("Image generation failed:", status, errorText);
+        throw new Error(`Image generation failed: ${status}`);
+      }
+
+      const data = await response.json();
+      imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      
+      if (imageUrl) {
+        console.log("✅ Lovable AI image generated successfully");
+      }
+    }
+
+    if (!imageUrl) {
+      console.error("❌ No image generated from any provider");
+      throw new Error("Failed to generate image from any provider");
     }
 
     return new Response(JSON.stringify({
       success: true,
-      imageUrl: imageData,
+      imageUrl: imageUrl,
+      provider: imageBase64 ? "huggingface" : "lovable",
       message: "Image generated successfully!"
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
