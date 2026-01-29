@@ -197,16 +197,8 @@ const AgentChatPage = () => {
 
     // "Post now" commands are now handled by the agent via auto_schedule
     // We inform the user to use the agent for posting
-    const wantsPostNow =
-      /\bpost(\s+it)?\s+now\b/i.test(message) ||
-      /\bpublish(\s+it)?\s+now\b/i.test(message) ||
-      /\bsend(\s+it)?\s+now\b/i.test(message);
-
-    if (wantsPostNow && generatedPosts.length === 0) {
-      toast.error("No post to publish. Generate a post first!");
-      addActivityEntry("failed", "No post to publish - blocked", undefined);
-      return;
-    }
+    // REMOVED: Frontend blocking of "post now" - let the agent handle it
+    // The agent now manages all intent detection including "post now"
     
     // Let the agent handle the post now request naturally via message
 

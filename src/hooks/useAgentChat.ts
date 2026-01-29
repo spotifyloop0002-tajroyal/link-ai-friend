@@ -276,13 +276,13 @@ export function useAgentChat(
         return data;
       }
 
-      // If posts were generated, ADD them to generatedPosts with draft status
-      // This allows "post now" and scheduling to work immediately
-      console.log("📦 Response data type:", data.type, "Posts count:", data.posts?.length);
+      // ALWAYS add posts to generatedPosts IMMEDIATELY when received
+      console.log("📦 Response data:", { type: data.type, postsCount: data.posts?.length });
       
-      if (data.type === "posts_generated" && data.posts?.length > 0) {
-        console.log("📝 Adding generated posts to queue:", data.posts.length);
-        console.log("📝 Post content preview:", data.posts[0]?.content?.substring(0, 100));
+      // Add posts regardless of response type (posts_generated, message, etc)
+      if (data.posts && data.posts.length > 0) {
+        console.log("🔥 ADDING POSTS TO STATE NOW:", data.posts.length);
+        console.log("🔥 Post content:", data.posts[0]?.content?.substring(0, 100));
         
         const newPosts: GeneratedPost[] = data.posts.map((p: any) => ({
           ...p,
@@ -292,26 +292,16 @@ export function useAgentChat(
           imageSkipped: false,
         }));
         
-        // Add to generated posts (prepend to show newest first)
+        // CRITICAL: Add to generated posts immediately
         setGeneratedPosts(prev => {
           const updated = [...newPosts, ...prev];
-          console.log("✅ Updated generatedPosts array, new count:", updated.length);
+          console.log("✅ generatedPosts NOW HAS:", updated.length, "posts");
           return updated;
         });
         
-        toast.success(`📝 Post ready! Say "post now" or provide a time to schedule.`);
-      } else if (data.posts?.length > 0) {
-        // Posts generated but type isn't "posts_generated" - still add them
-        console.log("⚠️ Posts in response but type was:", data.type, "- adding anyway");
-        const newPosts: GeneratedPost[] = data.posts.map((p: any) => ({
-          ...p,
-          id: p.id || `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          status: 'draft' as PostStatus,
-          approved: false,
-          imageSkipped: false,
-        }));
-        setGeneratedPosts(prev => [...newPosts, ...prev]);
-        toast.success(`📝 Post ready! Say "post now" or provide a time to schedule.`);
+        toast.success(`📝 Post created! Say "post now" or give a time to schedule.`);
+      } else {
+        console.log("⚠️ No posts in response to add");
       }
 
       return data;
