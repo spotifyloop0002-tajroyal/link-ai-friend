@@ -95,9 +95,9 @@ const Login = () => {
 
       if (error) throw error;
 
-      if (data.user) {
-        // ✅ Initialize user in extension (improved auth flow)
-        initializeUserInExtension(data.user.id, data.user.email);
+      if (data.session?.user && data.session.access_token) {
+        // ✅ Initialize user in extension with access token (v3.1.1+)
+        initializeUserInExtension(data.session.user.id, data.session.user.email, data.session.access_token);
         
         toast({
           title: "Account created!",
@@ -136,9 +136,9 @@ const Login = () => {
 
       if (error) throw error;
 
-      // ✅ Initialize user in extension (improved auth flow)
-      if (data.user) {
-        initializeUserInExtension(data.user.id, data.user.email);
+      // ✅ Initialize user in extension with access token (v3.1.1+)
+      if (data.session?.user && data.session.access_token) {
+        initializeUserInExtension(data.session.user.id, data.session.user.email, data.session.access_token);
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -174,14 +174,24 @@ const Login = () => {
     }
   };
 
-  // Helper function to initialize user in extension
-  const initializeUserInExtension = (userId: string, email: string | undefined) => {
+  // Helper function to initialize user in extension with access token
+  const initializeUserInExtension = (userId: string, email: string | undefined, accessToken?: string) => {
     console.log('🔒 Initializing user in extension:', userId);
     
     // Check if extension bridge is available
     const windowWithBridge = window as any;
     if (typeof windowWithBridge.LinkedBotBridge !== 'undefined') {
       windowWithBridge.LinkedBotBridge.setCurrentUser(userId);
+    }
+    
+    // ✅ NEW v3.1.1: Send SET_AUTH with both userId and accessToken
+    if (accessToken) {
+      console.log('📤 Sending auth to extension');
+      window.postMessage({
+        type: 'SET_AUTH',
+        userId: userId,
+        accessToken: accessToken
+      }, '*');
     }
     
     // Send INITIALIZE_USER message for improved extension auth
@@ -197,7 +207,7 @@ const Login = () => {
       userId: userId
     }, '*');
     
-    console.log('✅ User initialization sent to extension');
+    console.log('✅ Auth sent to extension');
   };
 
   if (checkingAuth) {

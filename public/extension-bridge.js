@@ -378,7 +378,41 @@ window.addEventListener('message', (event) => {
   
   const message = event.data;
   
-  // ✅ NEW v3.0: SET_USER_ID (primary method for user sync)
+  // ✅ NEW v3.1.1: SET_AUTH (primary method for auth sync with access token)
+  if (message.type === 'SET_AUTH') {
+    console.log('🔑 Bridge v3.1.1: Setting auth:', message.userId);
+    
+    // Dispatch event for extension to save both userId and accessToken
+    window.dispatchEvent(new CustomEvent('linkedbot:set-auth', {
+      detail: { 
+        userId: message.userId,
+        accessToken: message.accessToken
+      }
+    }));
+    
+    // Also dispatch legacy events for backwards compatibility
+    window.dispatchEvent(new CustomEvent('linkedbot:set-user-id', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.dispatchEvent(new CustomEvent('linkedbot:user-changed', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.dispatchEvent(new CustomEvent('linkedbot:user-initialized', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.postMessage({
+      type: 'AUTH_SET',
+      success: true,
+      userId: message.userId
+    }, '*');
+    
+    console.log('✅ Auth dispatched to extension');
+  }
+  
+  // ✅ SET_USER_ID (legacy method for user sync)
   if (message.type === 'SET_USER_ID') {
     console.log('🔒 Bridge v3.0: Setting user ID:', message.userId);
     
