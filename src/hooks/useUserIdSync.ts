@@ -18,7 +18,18 @@ export const useUserIdSync = () => {
         if (session?.user && session.access_token) {
           console.log('📤 Sending auth to extension:', session.user.id);
           
-          // ✅ NEW v3.1.1: Send SET_AUTH with both userId and accessToken
+          // ✅ Store in window object directly (bridge will pick this up)
+          if (typeof window !== 'undefined') {
+            (window as any).LinkedBotAuth = {
+              userId: session.user.id,
+              accessToken: session.access_token
+            };
+            // Also store in localStorage for persistence
+            localStorage.setItem('linkedbot_user_id', session.user.id);
+            localStorage.setItem('linkedbot_access_token', session.access_token);
+          }
+          
+          // ✅ NEW v3.2.1: Send SET_AUTH with both userId and accessToken
           window.postMessage({
             type: 'SET_AUTH',
             userId: session.user.id,
@@ -42,7 +53,15 @@ export const useUserIdSync = () => {
             email: session.user.email || null
           }, '*');
           
-          console.log('✅ Auth sent to extension');
+          // ✅ v3.2.1: Also broadcast via custom event
+          window.dispatchEvent(new CustomEvent('linkedbot:auth-ready', {
+            detail: {
+              userId: session.user.id,
+              accessToken: session.access_token
+            }
+          }));
+          
+          console.log('✅ Auth sent to extension via postMessage + CustomEvent + localStorage');
         } else {
           console.log('⚠️ No active session to sync');
         }
@@ -53,6 +72,10 @@ export const useUserIdSync = () => {
     
     // Sync immediately when component mounts
     syncAuthToExtension();
+    
+    // Also retry after a short delay (extension content script may load late)
+    const retryTimeout = setTimeout(syncAuthToExtension, 1000);
+    const retryTimeout2 = setTimeout(syncAuthToExtension, 3000);
     
     // Also sync when extension becomes ready
     const handleExtensionReady = () => {
@@ -111,6 +134,8 @@ export const useUserIdSync = () => {
     window.addEventListener('linkedbot-extension-ready', handleExtensionReady);
     
     return () => {
+      clearTimeout(retryTimeout);
+      clearTimeout(retryTimeout2);
       window.removeEventListener('linkedbot-extension-ready', handleExtensionReady);
       subscription.unsubscribe();
     };

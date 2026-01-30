@@ -372,15 +372,45 @@ window.LinkedBotBridge = {
   }
 };
 
+// ✅ Store auth in window + localStorage for extension to read
+window.LinkedBotAuth = {
+  userId: null,
+  accessToken: null,
+  setAuth: function(userId, accessToken) {
+    this.userId = userId;
+    this.accessToken = accessToken;
+    // Also store in localStorage as backup
+    if (userId) {
+      localStorage.setItem('linkedbot_user_id', userId);
+      localStorage.setItem('linkedbot_access_token', accessToken || '');
+    }
+  },
+  getAuth: function() {
+    return {
+      userId: this.userId || localStorage.getItem('linkedbot_user_id'),
+      accessToken: this.accessToken || localStorage.getItem('linkedbot_access_token')
+    };
+  },
+  clearAuth: function() {
+    this.userId = null;
+    this.accessToken = null;
+    localStorage.removeItem('linkedbot_user_id');
+    localStorage.removeItem('linkedbot_access_token');
+  }
+};
+
 // Listen for user session management messages from webapp
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   
   const message = event.data;
   
-  // ✅ NEW v3.1.1: SET_AUTH (primary method for auth sync with access token)
+  // ✅ NEW v3.2.1: SET_AUTH (primary method for auth sync with access token)
   if (message.type === 'SET_AUTH') {
-    console.log('🔑 Bridge v3.1.1: Setting auth:', message.userId);
+    console.log('🔑 Bridge v3.2.1: Setting auth:', message.userId);
+    
+    // Store auth in window object for extension to read
+    window.LinkedBotAuth.setAuth(message.userId, message.accessToken);
     
     // Dispatch event for extension to save both userId and accessToken
     window.dispatchEvent(new CustomEvent('linkedbot:set-auth', {
@@ -403,13 +433,20 @@ window.addEventListener('message', (event) => {
       detail: { userId: message.userId }
     }));
     
+    // Post message for content script
+    window.postMessage({
+      type: 'LINKEDBOT_AUTH_READY',
+      userId: message.userId,
+      accessToken: message.accessToken
+    }, '*');
+    
     window.postMessage({
       type: 'AUTH_SET',
       success: true,
       userId: message.userId
     }, '*');
     
-    console.log('✅ Auth dispatched to extension');
+    console.log('✅ Auth set in window.LinkedBotAuth and dispatched to extension');
   }
   
   // ✅ SET_USER_ID (legacy method for user sync)
