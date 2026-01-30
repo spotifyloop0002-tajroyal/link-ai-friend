@@ -447,6 +447,23 @@ window.addEventListener('message', (event) => {
     }));
   }
   
+  // ✅ NEW v3.2: SCHEDULE_POSTS (schedule multiple posts with userId)
+  if (message.type === 'SCHEDULE_POSTS') {
+    console.log('📅 Bridge v3.2: SCHEDULE_POSTS request received', message.posts?.length, 'posts');
+    
+    // Ensure userId is included in each post for ownership verification
+    const postsWithUserId = (message.posts || []).map(post => ({
+      ...post,
+      userId: post.userId || post.user_id,
+      user_id: post.user_id || post.userId,
+    }));
+    
+    // Dispatch event for extension to handle scheduling
+    window.dispatchEvent(new CustomEvent('linkedbot:schedule-posts', {
+      detail: { posts: postsWithUserId }
+    }));
+  }
+  
   // ✅ NEW v3.0: SCRAPE_ANALYTICS (request analytics for a post)
   if (message.type === 'SCRAPE_ANALYTICS') {
     console.log('📊 Bridge v3.0: SCRAPE_ANALYTICS request', message.url, message.postId);

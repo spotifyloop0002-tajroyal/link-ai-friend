@@ -393,7 +393,9 @@ export function useLinkedBotExtension() {
       if (fnName) {
         const transformedPosts = posts.map(post => ({
           id: post.id,
-          user_id: userId || post.user_id,
+          userId: userId || post.user_id, // For sync-post ownership verification
+          user_id: userId || post.user_id, // For extension compatibility
+          trackingId: (post as any).trackingId, // Include trackingId for post lookup
           content: post.content,
           photo_url: post.photo_url,
           scheduled_for: post.scheduled_time,
@@ -415,7 +417,9 @@ export function useLinkedBotExtension() {
     // Fallback to message-based scheduling
     const transformedPosts = posts.map(post => ({
       id: post.id,
-      user_id: userId || post.user_id,
+      userId: userId || post.user_id, // For sync-post ownership verification
+      user_id: userId || post.user_id, // For extension compatibility
+      trackingId: (post as any).trackingId, // Include trackingId for post lookup
       content: post.content,
       photo_url: post.photo_url,
       scheduled_for: post.scheduled_time,

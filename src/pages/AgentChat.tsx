@@ -269,19 +269,32 @@ const AgentChatPage = () => {
           return;
         }
         
+        // Get current user ID for extension communication
+        const { data: { user } } = await supabase.auth.getUser();
+        const currentUserId = user?.id;
+        
+        if (!currentUserId) {
+          console.error("❌ No authenticated user found");
+          addActivityEntry("failed", "User not authenticated", savedPost.id);
+          toast.error("Please log in again to schedule posts");
+          return;
+        }
+        
         const postForExtension = {
           id: savedPost.dbId || savedPost.id,
           trackingId: savedPost.trackingId,
+          userId: currentUserId, // CRITICAL: Include userId for ownership verification
           content: savedPost.content,
           imageUrl: savedPost.imageUrl || undefined,
           scheduledTime: validScheduledTime,
           photo_url: savedPost.imageUrl || undefined,
           scheduled_time: validScheduledTime,
+          user_id: currentUserId, // Also include as user_id for extension compatibility
         };
         
-        console.log("📤 Sending to extension:", postForExtension);
+        console.log("📤 Sending to extension with userId:", postForExtension);
         
-        const result = await sendPendingPosts([postForExtension as any]);
+        const result = await sendPendingPosts([postForExtension as any], currentUserId);
         
         if (result.success) {
           // Add to Generated Posts panel ONLY after successful extension handoff
@@ -297,11 +310,16 @@ const AgentChatPage = () => {
           addActivityEntry("scheduled", `Scheduled for ${format(scheduledTime, 'MMM d, h:mm a')}`, savedPost.id);
           toast.success(`✅ Post scheduled for ${format(scheduledTime, 'MMM d, h:mm a')}!`);
           
-          // Update database to mark sent to extension
-          await supabase.from('posts').update({ 
+          // Update database to mark sent to extension with error handling
+          const { error: updateError } = await supabase.from('posts').update({ 
             sent_to_extension_at: new Date().toISOString(),
             status: 'queued_in_extension',
           }).eq('id', savedPost.dbId || savedPost.id);
+          
+          if (updateError) {
+            console.error('Failed to update post status in database:', updateError);
+            // Continue anyway - extension has the post
+          }
         } else {
           addActivityEntry("failed", result.error || "Failed to send to extension", savedPost.id);
           toast.error(result.error || "❌ Failed to send to extension");
