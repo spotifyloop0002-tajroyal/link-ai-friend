@@ -378,6 +378,84 @@ window.addEventListener('message', (event) => {
   
   const message = event.data;
   
+  // ✅ NEW v3.0: SET_USER_ID (primary method for user sync)
+  if (message.type === 'SET_USER_ID') {
+    console.log('🔒 Bridge v3.0: Setting user ID:', message.userId);
+    
+    // Dispatch event for extension to save user ID
+    window.dispatchEvent(new CustomEvent('linkedbot:set-user-id', {
+      detail: { userId: message.userId }
+    }));
+    
+    // Also dispatch legacy events for backwards compatibility
+    window.dispatchEvent(new CustomEvent('linkedbot:user-changed', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.dispatchEvent(new CustomEvent('linkedbot:user-initialized', {
+      detail: { userId: message.userId }
+    }));
+    
+    window.postMessage({
+      type: 'USER_ID_SET',
+      success: true,
+      userId: message.userId
+    }, '*');
+  }
+  
+  // ✅ NEW v3.0: POST_NOW (immediate post request)
+  if (message.type === 'POST_NOW') {
+    console.log('📤 Bridge v3.0: POST_NOW request received', message.post);
+    
+    // Dispatch event for extension to handle posting
+    window.dispatchEvent(new CustomEvent('linkedbot:post-now', {
+      detail: message.post
+    }));
+  }
+  
+  // ✅ NEW v3.0: SCRAPE_ANALYTICS (request analytics for a post)
+  if (message.type === 'SCRAPE_ANALYTICS') {
+    console.log('📊 Bridge v3.0: SCRAPE_ANALYTICS request', message.url, message.postId);
+    
+    // Dispatch event for extension to scrape analytics
+    window.dispatchEvent(new CustomEvent('linkedbot:scrape-analytics', {
+      detail: { 
+        url: message.url, 
+        postId: message.postId 
+      }
+    }));
+  }
+  
+  // ✅ NEW v3.0: Handle POST_RESULT from extension
+  if (message.type === 'POST_RESULT') {
+    console.log('📤 Bridge v3.0: POST_RESULT received', message);
+    
+    if (message.success && message.data?.linkedinUrl) {
+      // Call the existing onPostPublished handler
+      window.LinkedBotBridge.onPostPublished({
+        postId: message.data.postId,
+        trackingId: message.data.trackingId,
+        linkedinUrl: message.data.linkedinUrl,
+        postedAt: message.data.postedAt || new Date().toISOString()
+      });
+    } else if (!message.success) {
+      // Call the existing onPostFailed handler
+      window.LinkedBotBridge.onPostFailed({
+        postId: message.data?.postId,
+        trackingId: message.data?.trackingId,
+        error: message.data?.error || 'Unknown error'
+      });
+    }
+  }
+  
+  // ✅ NEW v3.0: Handle ANALYTICS_RESULT from extension
+  if (message.type === 'ANALYTICS_RESULT') {
+    console.log('📊 Bridge v3.0: ANALYTICS_RESULT received', message);
+    
+    // This is handled directly by the analytics-cron.ts listener
+    // The postMessage is already being propagated through window
+  }
+  
   // Legacy: SET_CURRENT_USER (backwards compatible)
   if (message.type === 'SET_CURRENT_USER') {
     console.log('👤 Bridge: Setting current user in extension:', message.userId);
@@ -394,7 +472,7 @@ window.addEventListener('message', (event) => {
     }, '*');
   }
   
-  // NEW: INITIALIZE_USER (improved auth flow)
+  // INITIALIZE_USER (improved auth flow)
   if (message.type === 'INITIALIZE_USER') {
     console.log('🔒 Bridge: Initializing user in extension:', message.userId);
     
@@ -433,7 +511,7 @@ window.addEventListener('message', (event) => {
     }, '*');
   }
   
-  // NEW: LOGOUT_USER (improved auth flow)
+  // LOGOUT_USER (improved auth flow)
   if (message.type === 'LOGOUT_USER') {
     console.log('🔒 Bridge: Logging out user from extension');
     
@@ -453,7 +531,7 @@ window.addEventListener('message', (event) => {
     }, '*');
   }
   
-  // NEW: CHECK_USER_AUTH (for debugging)
+  // CHECK_USER_AUTH (for debugging)
   if (message.type === 'CHECK_USER_AUTH') {
     console.log('🔍 Bridge: Checking user auth status');
     
