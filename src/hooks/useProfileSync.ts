@@ -131,7 +131,7 @@ export const useProfileSync = () => {
       } else if (errorMessage.includes('Could not establish connection')) {
         userMessage = 'Lost connection to extension. Please refresh and reconnect.';
       } else if (errorMessage.includes('No tab with id')) {
-        userMessage = 'LinkedIn tab was closed. Please keep LinkedIn open.';
+        userMessage = 'LinkedIn tab was closed. The extension will attempt to reopen it automatically.';
       }
 
       toast({

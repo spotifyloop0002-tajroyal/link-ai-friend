@@ -332,7 +332,7 @@ export function useLinkedBotExtension() {
           let userFriendlyError = result.error;
           
           if (result.error.includes('No tab with id')) {
-            userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
+            userFriendlyError = 'LinkedIn tab was closed. The extension will attempt to reopen it automatically.';
           } else if (result.error.includes('Extension context invalidated')) {
             userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
           } else if (result.error.includes('Could not establish connection')) {

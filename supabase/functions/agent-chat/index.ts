@@ -1209,7 +1209,7 @@ Or would you prefer different topics/timing?`;
           console.log("✅ Preparing to send post to extension:", postToSchedule.id);
           console.log("⏰ Scheduled time (immediate):", immediateTime.toISOString());
           
-          response = `🚀 **Posting Now**\n\nSending your post to the Chrome extension for immediate publishing...\n\nPlease keep LinkedIn open in another tab.`;
+          response = `🚀 **Posting Now**\n\nSending your post to the Chrome extension for immediate publishing...\n\nThe extension will automatically open LinkedIn and publish your post.`;
           action = "post_now";
           
           // Return with immediate schedule time
