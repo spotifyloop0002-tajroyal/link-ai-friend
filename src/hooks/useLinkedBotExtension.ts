@@ -1,129 +1,384 @@
-import { useState, useEffect, useCallback } from 'react';
+// useLinkedBotExtension.ts
+// React hook for LinkedBot Chrome Extension Communication
+// Handles context invalidation and auto-reconnection
 
-interface ExtensionStatus {
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
+
+interface ExtensionState {
   isInstalled: boolean;
   isConnected: boolean;
   extensionId: string | null;
+  isLoading: boolean;
+  requiresRefresh: boolean;
 }
 
-interface Post {
+interface PostData {
   id: string;
   content: string;
+  scheduled_time?: string;
   photo_url?: string;
-  scheduled_time: string;
+  user_id?: string;
 }
 
-export const useLinkedBotExtension = () => {
-  const [status, setStatus] = useState<ExtensionStatus>({
+export function useLinkedBotExtension() {
+  const [state, setState] = useState<ExtensionState>({
     isInstalled: false,
     isConnected: false,
     extensionId: null,
+    isLoading: true,
+    requiresRefresh: false,
   });
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
-  // Check if extension is installed and get status
-  const checkExtension = useCallback(async () => {
-    if (typeof window.LinkedBotExtension === 'undefined') {
-      setStatus({
-        isInstalled: false,
-        isConnected: false,
-        extensionId: null,
-      });
-      setIsLoading(false);
-      return;
-    }
+  // ============================================================================
+  // HANDLE EXTENSION MESSAGES
+  // ============================================================================
+  
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const message = event.data;
 
-    try {
-      const result = await window.LinkedBotExtension.checkStatus();
-      setStatus({
-        isInstalled: true,
-        isConnected: result.connected,
-        extensionId: result.extensionId || null,
-      });
-    } catch (error) {
-      console.error('Error checking extension:', error);
-      setStatus({
-        isInstalled: true,
-        isConnected: false,
-        extensionId: null,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Connect extension
-  const connectExtension = useCallback(async () => {
-    if (typeof window.LinkedBotExtension === 'undefined') {
-      throw new Error('Extension not installed');
-    }
-
-    try {
-      const result = await window.LinkedBotExtension.connect();
-
-      if (result.success) {
-        setStatus({
-          isInstalled: true,
-          isConnected: true,
-          extensionId: result.extensionId || null,
-        });
-
-        localStorage.setItem('extension_connected', 'true');
-        if (result.extensionId) {
-          localStorage.setItem('extension_id', result.extensionId);
+      // Extension connected
+      if (message.type === 'EXTENSION_CONNECTED') {
+        if (message.extensionId) {
+          setState({
+            isInstalled: true,
+            isConnected: true,
+            extensionId: message.extensionId,
+            isLoading: false,
+            requiresRefresh: false,
+          });
+          
+          toast.success('Extension Connected', {
+            description: 'LinkedBot extension is ready to use!',
+          });
+        } else {
+          setState(prev => ({
+            ...prev,
+            isConnected: false,
+            isLoading: false,
+            requiresRefresh: message.requiresRefresh || false,
+          }));
+          
+          if (message.requiresRefresh) {
+            toast.error('Refresh Required', {
+              description: message.error || 'Extension was reloaded. Please refresh the page.',
+              duration: 10000,
+            });
+          }
         }
-
-        return { success: true, extensionId: result.extensionId };
-      } else {
-        throw new Error(result.error || 'Connection failed');
       }
-    } catch (error) {
-      console.error('Error connecting extension:', error);
-      throw error;
-    }
+
+      // Extension status check
+      if (message.type === 'EXTENSION_STATUS') {
+        setState(prev => ({
+          ...prev,
+          isInstalled: true,
+          isConnected: message.connected,
+          extensionId: message.extensionId || prev.extensionId,
+          isLoading: false,
+          requiresRefresh: message.requiresRefresh || false,
+        }));
+        
+        if (message.requiresRefresh) {
+          toast.error('Refresh Required', {
+            description: 'Extension was reloaded. Please refresh the page.',
+            duration: 10000,
+          });
+        }
+      }
+
+      // Extension disconnected
+      if (message.type === 'EXTENSION_DISCONNECTED') {
+        setState({
+          isInstalled: true,
+          isConnected: false,
+          extensionId: null,
+          isLoading: false,
+          requiresRefresh: false,
+        });
+      }
+
+      // Context invalidated - CRITICAL
+      if (message.type === 'EXTENSION_CONTEXT_INVALIDATED') {
+        setState({
+          isInstalled: true,
+          isConnected: false,
+          extensionId: null,
+          isLoading: false,
+          requiresRefresh: true,
+        });
+        
+        toast.error('⚠️ Page Refresh Required', {
+          description: 'The extension was reloaded. Please refresh this page to reconnect.',
+          duration: Infinity,
+          action: {
+            label: 'Refresh Now',
+            onClick: () => window.location.reload(),
+          },
+        });
+      }
+
+      // Schedule result
+      if (message.type === 'SCHEDULE_RESULT') {
+        if (message.requiresRefresh) {
+          toast.error('Refresh Required', {
+            description: 'Extension was reloaded. Please refresh the page.',
+            duration: 10000,
+          });
+          return;
+        }
+        
+        if (message.success) {
+          toast.success('Posts Scheduled', {
+            description: `${message.queueLength || message.scheduledCount || 1} post(s) in queue`,
+          });
+        } else {
+          toast.error('Schedule Failed', {
+            description: message.error || 'Could not schedule posts',
+          });
+        }
+      }
+
+      // Post result
+      if (message.type === 'POST_RESULT') {
+        if (message.requiresRefresh) {
+          toast.error('Refresh Required', {
+            description: 'Extension was reloaded. Please refresh the page.',
+            duration: 10000,
+          });
+          return;
+        }
+        
+        if (message.success) {
+          toast.success('Post Published!', {
+            description: 'Your LinkedIn post is now live',
+          });
+        } else {
+          toast.error('Publishing Failed', {
+            description: message.error || 'Could not publish post',
+          });
+        }
+      }
+    };
+
+    messageHandlerRef.current = handleMessage;
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      if (messageHandlerRef.current) {
+        window.removeEventListener('message', messageHandlerRef.current);
+      }
+    };
   }, []);
 
-  // Disconnect extension
+  // ============================================================================
+  // AUTO-CONNECT ON MOUNT
+  // ============================================================================
+  
+  useEffect(() => {
+    // Check if extension API is available directly
+    if (typeof window.LinkedBotExtension !== 'undefined') {
+      setState(prev => ({ ...prev, isInstalled: true }));
+      checkExtension();
+    } else {
+      // Auto-check extension status on mount via message
+      setTimeout(() => {
+        window.postMessage({ type: 'CHECK_EXTENSION' }, '*');
+      }, 500);
+      
+      // Also set loading to false after timeout if no response
+      setTimeout(() => {
+        setState(prev => {
+          if (prev.isLoading) {
+            return { ...prev, isLoading: false };
+          }
+          return prev;
+        });
+      }, 2000);
+    }
+
+    // Listen for extension ready event
+    const handleExtensionReady = () => {
+      setState(prev => ({ ...prev, isInstalled: true }));
+      checkExtension();
+    };
+
+    window.addEventListener('linkedbot-extension-ready', handleExtensionReady);
+
+    return () => {
+      window.removeEventListener('linkedbot-extension-ready', handleExtensionReady);
+    };
+  }, []);
+
+  // ============================================================================
+  // API METHODS
+  // ============================================================================
+  
+  const connectExtension = useCallback(async () => {
+    setState(prev => ({ ...prev, isLoading: true }));
+    
+    // Try direct API first
+    if (typeof window.LinkedBotExtension?.connect === 'function') {
+      try {
+        const result = await window.LinkedBotExtension.connect();
+        if (result.success) {
+          setState({
+            isInstalled: true,
+            isConnected: true,
+            extensionId: result.extensionId || null,
+            isLoading: false,
+            requiresRefresh: false,
+          });
+          localStorage.setItem('extension_connected', 'true');
+          if (result.extensionId) {
+            localStorage.setItem('extension_id', result.extensionId);
+          }
+          return { success: true, extensionId: result.extensionId };
+        } else {
+          throw new Error(result.error || 'Connection failed');
+        }
+      } catch (error) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        throw error;
+      }
+    }
+    
+    // Fallback to message-based connection
+    window.postMessage({ type: 'CONNECT_EXTENSION' }, '*');
+    return { success: true };
+  }, []);
+
   const disconnectExtension = useCallback(async () => {
-    if (typeof window.LinkedBotExtension === 'undefined') {
-      return;
-    }
-
-    try {
+    // Try direct API first
+    if (typeof window.LinkedBotExtension?.disconnect === 'function') {
       await window.LinkedBotExtension.disconnect();
-      setStatus({
-        isInstalled: true,
-        isConnected: false,
-        extensionId: null,
-      });
-
-      localStorage.removeItem('extension_connected');
-      localStorage.removeItem('extension_id');
-    } catch (error) {
-      console.error('Error disconnecting extension:', error);
     }
+    
+    // Also send message
+    window.postMessage({ type: 'DISCONNECT_EXTENSION' }, '*');
+    
+    setState({
+      isInstalled: true,
+      isConnected: false,
+      extensionId: null,
+      isLoading: false,
+      requiresRefresh: false,
+    });
+    
+    localStorage.removeItem('extension_connected');
+    localStorage.removeItem('extension_id');
   }, []);
 
-  // Send pending posts to extension
-  const sendPendingPosts = useCallback(async (posts: Post[], userId?: string): Promise<{ success: boolean; error?: string; queueLength?: number }> => {
-    if (typeof window.LinkedBotExtension === 'undefined') {
-      return { success: false, error: 'Extension not installed. Please install the Chrome extension first.' };
-    }
-
-    // Re-check status before sending
-    try {
-      const statusCheck = await window.LinkedBotExtension.checkStatus();
-      if (!statusCheck.connected) {
-        return { success: false, error: 'Extension not connected. Please connect from the Dashboard first.' };
+  const checkExtension = useCallback(async () => {
+    // Try direct API first
+    if (typeof window.LinkedBotExtension?.checkStatus === 'function') {
+      try {
+        const result = await window.LinkedBotExtension.checkStatus();
+        setState(prev => ({
+          ...prev,
+          isInstalled: true,
+          isConnected: result.connected,
+          extensionId: result.extensionId || prev.extensionId,
+          isLoading: false,
+        }));
+        return;
+      } catch (error) {
+        console.error('Error checking extension:', error);
       }
-    } catch {
-      return { success: false, error: 'Could not verify extension status.' };
+    }
+    
+    // Fallback to message
+    window.postMessage({ type: 'CHECK_EXTENSION' }, '*');
+  }, []);
+
+  const postNow = useCallback(async (post: PostData): Promise<{ success: boolean; error?: string; linkedinPostId?: string }> => {
+    console.log('=== useLinkedBotExtension.postNow CALLED ===');
+    console.log('Post:', post);
+    console.log('State:', state);
+
+    if (!state.isConnected) {
+      toast.error('Not Connected', {
+        description: 'Please connect the extension first',
+      });
+      return { success: false, error: 'Extension not connected' };
     }
 
-    try {
-      const api: any = window.LinkedBotExtension;
+    if (state.requiresRefresh) {
+      toast.error('Refresh Required', {
+        description: 'Extension was reloaded. Please refresh the page.',
+        action: {
+          label: 'Refresh',
+          onClick: () => window.location.reload(),
+        },
+      });
+      return { success: false, error: 'Page refresh required' };
+    }
 
-      // Support multiple extension versions by probing available method names.
+    // Try direct API first
+    if (typeof window.LinkedBotExtension?.postNow === 'function') {
+      try {
+        const result = await window.LinkedBotExtension.postNow({
+          id: post.id,
+          content: post.content,
+          photo_url: post.photo_url,
+          scheduled_time: post.scheduled_time || new Date().toISOString(),
+        });
+        
+        if (!result.success && result.error) {
+          let userFriendlyError = result.error;
+          
+          if (result.error.includes('No tab with id')) {
+            userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
+          } else if (result.error.includes('Extension context invalidated')) {
+            userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
+          } else if (result.error.includes('Could not establish connection')) {
+            userFriendlyError = 'Extension disconnected. Please check if the extension is enabled in Chrome.';
+          }
+          
+          return { success: false, error: userFriendlyError };
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Error posting:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to post' 
+        };
+      }
+    }
+
+    // Fallback to message-based posting
+    window.postMessage({
+      type: 'POST_NOW',
+      post: {
+        id: post.id,
+        user_id: post.user_id,
+        content: post.content,
+        photo_url: post.photo_url,
+        scheduled_for: post.scheduled_time || new Date().toISOString(),
+      },
+    }, '*');
+    
+    return { success: true };
+  }, [state.isConnected, state.requiresRefresh]);
+
+  const sendPendingPosts = useCallback(async (posts: PostData[], userId?: string): Promise<{ success: boolean; error?: string; queueLength?: number }> => {
+    if (!state.isConnected) {
+      return { success: false, error: 'Extension not connected' };
+    }
+
+    if (state.requiresRefresh) {
+      return { success: false, error: 'Page refresh required' };
+    }
+
+    // Try direct API first
+    if (typeof window.LinkedBotExtension !== 'undefined') {
+      const api: any = window.LinkedBotExtension;
       const candidates = [
         'sendPendingPosts',
         'sendPosts',
@@ -135,216 +390,122 @@ export const useLinkedBotExtension = () => {
       ];
 
       const fnName = candidates.find((name) => typeof api?.[name] === 'function');
-      if (!fnName) {
-        const available = api ? Object.keys(api).filter((k) => typeof api[k] === 'function') : [];
-        console.error('Extension scheduling API not found. Available methods:', available);
-        return {
-          success: false,
-          error:
-            'Your extension does not support scheduling from the app (missing scheduling API). Please update the extension and try again.',
-        };
-      }
+      if (fnName) {
+        const transformedPosts = posts.map(post => ({
+          id: post.id,
+          user_id: userId || post.user_id,
+          content: post.content,
+          photo_url: post.photo_url,
+          scheduled_for: post.scheduled_time,
+          scheduled_time: post.scheduled_time,
+        }));
 
-      // 🔒 Transform posts to match extension's expected format
-      // Extension expects: user_id, scheduled_for (not scheduled_time)
-      const transformedPosts = posts.map(post => ({
-        id: post.id,
-        user_id: userId || (post as any).user_id, // 🔒 Include user_id for ownership verification
-        content: post.content,
-        photo_url: post.photo_url,
-        scheduled_for: post.scheduled_time, // 🔒 Extension expects scheduled_for not scheduled_time
-        scheduled_time: post.scheduled_time, // Keep both for compatibility
-      }));
-
-      console.log('📤 Calling extension method:', fnName, 'with posts:', transformedPosts);
-      
-      // Await the result if the function returns a promise
-      const result = await api[fnName](transformedPosts);
-      console.log('📥 Extension response:', result);
-      
-      // Validate response
-      if (result && typeof result === 'object' && result.success === false) {
-        return { success: false, error: result.error || 'Extension rejected posts' };
-      }
-      
-      return { success: true, queueLength: result?.queueLength };
-    } catch (error) {
-      console.error('Error sending posts to extension:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Failed to send posts' };
-    }
-  }, []);
-
-  // Post immediately with enhanced error handling
-  const postNow = useCallback(async (post: Post): Promise<{ success: boolean; error?: string; linkedinPostId?: string }> => {
-    console.log('=== useLinkedBotExtension.postNow CALLED ===');
-    console.log('Post:', post);
-    console.log('Extension available:', typeof window.LinkedBotExtension !== 'undefined');
-    console.log('Status:', status);
-    
-    // GATE 1: Extension must be available
-    if (typeof window.LinkedBotExtension === 'undefined') {
-      console.error('❌ GATE 1 FAILED: Extension not installed');
-      return { 
-        success: false, 
-        error: 'Extension not installed. Please install the LinkedBot Chrome extension first.' 
-      };
-    }
-
-    // GATE 2: Must be connected
-    if (!status.isConnected) {
-      console.error('❌ GATE 2 FAILED: Extension not connected');
-      return { 
-        success: false, 
-        error: 'Extension not connected. Please connect from the Dashboard first.' 
-      };
-    }
-
-    // GATE 3: Post must have content
-    if (!post.content || post.content.trim() === '') {
-      console.error('❌ GATE 3 FAILED: Post content is empty');
-      return { 
-        success: false, 
-        error: 'Post content is empty. Generate a post first.' 
-      };
-    }
-
-    console.log('✅ All gates passed, calling extension...');
-
-    try {
-      // Re-check connection status before posting
-      console.log('Re-checking extension connection status...');
-      const statusCheck = await window.LinkedBotExtension.checkStatus();
-      console.log('Status check result:', statusCheck);
-      
-      if (!statusCheck.connected) {
-        console.error('❌ Extension disconnected during posting');
-        return { 
-          success: false, 
-          error: 'Extension disconnected. Please reconnect from the Dashboard.' 
-        };
-      }
-
-      console.log('📤 Calling window.LinkedBotExtension.postNow()...');
-      const result = await window.LinkedBotExtension.postNow(post);
-      console.log('📥 Extension postNow result:', result);
-      
-      // Handle extension-specific errors with user-friendly messages
-      if (!result.success && result.error) {
-        let userFriendlyError = result.error;
-        
-        if (result.error.includes('No tab with id')) {
-          userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
-        } else if (result.error.includes('Extension context invalidated')) {
-          userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
-        } else if (result.error.includes('Could not establish connection')) {
-          userFriendlyError = 'Extension disconnected. Please check if the extension is enabled in Chrome.';
-        } else if (result.error.includes('Receiving end does not exist')) {
-          userFriendlyError = 'Cannot reach LinkedIn tab. Please refresh LinkedIn and try again.';
-        } else if (result.error.includes('Cannot access')) {
-          userFriendlyError = 'Cannot access LinkedIn. Please make sure you are logged in to LinkedIn.';
+        try {
+          const result = await api[fnName](transformedPosts);
+          if (result && result.success === false) {
+            return { success: false, error: result.error || 'Extension rejected posts' };
+          }
+          return { success: true, queueLength: result?.queueLength };
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Failed to send posts' };
         }
-        
-        return { success: false, error: userFriendlyError };
       }
-      
-      return result;
-    } catch (error) {
-      console.error('Error posting:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      let userFriendlyError = errorMessage;
-      
-      if (errorMessage.includes('No tab with id')) {
-        userFriendlyError = 'LinkedIn tab was closed. Please keep LinkedIn open while posting.';
-      } else if (errorMessage.includes('Extension context invalidated')) {
-        userFriendlyError = 'Extension was reloaded. Please refresh this page and try again.';
-      } else if (errorMessage.includes('Could not establish connection')) {
-        userFriendlyError = 'Extension disconnected. Please check if the extension is enabled in Chrome.';
-      }
-      
-      return { success: false, error: userFriendlyError };
     }
-  }, [status.isConnected]);
 
-  // Listen for extension events
-  useEffect(() => {
-    if (typeof window.LinkedBotExtension === 'undefined') {
+    // Fallback to message-based scheduling
+    const transformedPosts = posts.map(post => ({
+      id: post.id,
+      user_id: userId || post.user_id,
+      content: post.content,
+      photo_url: post.photo_url,
+      scheduled_for: post.scheduled_time,
+    }));
+
+    window.postMessage({
+      type: 'SCHEDULE_POSTS',
+      posts: transformedPosts,
+    }, '*');
+    
+    return { success: true };
+  }, [state.isConnected, state.requiresRefresh]);
+
+  const scrapeAnalytics = useCallback(() => {
+    if (!state.isConnected) {
+      toast.error('Not Connected', {
+        description: 'Please connect the extension first',
+      });
       return;
     }
 
-    const handleEvent = (event: string, data: unknown) => {
-      console.log('Extension event:', event, data);
+    window.postMessage({ type: 'SCRAPE_ANALYTICS' }, '*');
+  }, [state.isConnected]);
 
-      switch (event) {
-        case 'postPublished':
-          console.log('Post published:', data);
-          window.dispatchEvent(new CustomEvent('linkedbot-post-published', { detail: data }));
-          break;
-
-        case 'analyticsScraped':
-          console.log('Analytics scraped:', data);
-          window.dispatchEvent(new CustomEvent('linkedbot-analytics-scraped', { detail: data }));
-          break;
-      }
-    };
-
-    window.LinkedBotExtension.onEvent(handleEvent);
-  }, []);
-
-  // Check extension on mount
-  useEffect(() => {
-    const handleExtensionReady = () => {
-      checkExtension();
-    };
-
-    if (typeof window.LinkedBotExtension !== 'undefined') {
-      checkExtension();
-    } else {
-      window.addEventListener('linkedbot-extension-ready', handleExtensionReady);
+  const scanPosts = useCallback(async (limit = 50) => {
+    if (!state.isConnected) {
+      return { success: false, error: 'Extension not connected' };
     }
 
-    return () => {
-      window.removeEventListener('linkedbot-extension-ready', handleExtensionReady);
-    };
-  }, [checkExtension]);
-
-  // Auto-connect if was previously connected
-  useEffect(() => {
-    const wasConnected = localStorage.getItem('extension_connected') === 'true';
-    if (wasConnected && status.isInstalled && !status.isConnected) {
-      connectExtension().catch(console.error);
+    // Try direct API first
+    if (typeof window.LinkedBotExtension?.scanPosts === 'function') {
+      return await window.LinkedBotExtension.scanPosts(limit);
     }
-  }, [status.isInstalled, status.isConnected, connectExtension]);
 
-  // 🔒 NEW: Set current user in extension (for data isolation)
+    // Fallback to message
+    window.postMessage({
+      type: 'SCAN_POSTS',
+      limit: limit,
+    }, '*');
+    
+    return { success: true };
+  }, [state.isConnected]);
+
+  // 🔒 Set current user in extension (for data isolation)
   const setCurrentUser = useCallback((userId: string) => {
     console.log('🔒 Setting current user in extension:', userId);
     window.postMessage({
       type: 'SET_CURRENT_USER',
       userId: userId
     }, '*');
+    window.postMessage({
+      type: 'SET_USER_ID',
+      userId: userId
+    }, '*');
   }, []);
 
-  // 🔒 NEW: Clear user session on logout
+  // 🔒 Clear user session on logout
   const clearUserSession = useCallback(() => {
     console.log('🔒 Clearing user session in extension');
     window.postMessage({
       type: 'CLEAR_USER_SESSION'
     }, '*');
+    window.postMessage({
+      type: 'LOGOUT_USER'
+    }, '*');
   }, []);
 
   return {
-    ...status,
-    isLoading,
+    // State - maintain backwards compatibility
+    isInstalled: state.isInstalled,
+    isConnected: state.isConnected,
+    extensionId: state.extensionId,
+    isLoading: state.isLoading,
+    requiresRefresh: state.requiresRefresh,
+    
+    // Methods
     connectExtension,
     disconnectExtension,
-    sendPendingPosts,
-    postNow,
     checkExtension,
-    setCurrentUser, // 🔒 NEW
-    clearUserSession, // 🔒 NEW
+    postNow,
+    sendPendingPosts,
+    scrapeAnalytics,
+    scanPosts,
+    setCurrentUser,
+    clearUserSession,
   };
-};
+}
+
+// Export as both named and default for compatibility
+export const useLinkedBotExtensionHook = useLinkedBotExtension;
 
 // Type declaration for window
 declare global {
@@ -359,9 +520,7 @@ declare global {
       sendPendingPosts: (posts: { id: string; content: string; photo_url?: string; scheduled_time: string }[]) => void;
       postNow: (post: { id: string; content: string; photo_url?: string; scheduled_time: string }) => Promise<{ success: boolean; linkedinPostId?: string; error?: string }>;
       onEvent: (callback: (event: string, data: unknown) => void) => void;
-      // Profile URL method
       saveProfileUrl?: (url: string) => Promise<{ success: boolean; error?: string }>;
-      // Profile scraping - navigates to profile URL and extracts data
       scrapeProfile?: (profileUrl: string) => Promise<{
         success: boolean;
         error?: string;
@@ -378,7 +537,6 @@ declare global {
           username?: string;
         };
       }>;
-      // Analytics methods
       scrapeAnalytics: () => Promise<{ 
         success: boolean; 
         error?: string; 
