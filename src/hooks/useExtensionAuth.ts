@@ -27,10 +27,18 @@ export const useExtensionAuth = () => {
         
         // Store in window object for extension to read
         if (typeof window !== 'undefined') {
+          // Set directly on window - don't call setAuth function
+          // The extension-bridge.js may not have loaded yet
+          const existingAuth = (window as any).LinkedBotAuth || {};
           (window as any).LinkedBotAuth = {
+            ...existingAuth,
             userId: session.user.id,
             accessToken: session.access_token,
-            refreshToken: session.refresh_token
+            refreshToken: session.refresh_token,
+            // Preserve the functions if they exist
+            setAuth: existingAuth.setAuth,
+            getAuth: existingAuth.getAuth,
+            clearAuth: existingAuth.clearAuth
           };
           
           // Store in localStorage as backup
