@@ -109,30 +109,7 @@ export function ExtensionConnectionPanel() {
           </>
         )}
 
-        {/* INSTALLATION HELP */}
-        {!isInstalled && !isLoading && !requiresRefresh && (
-          <Alert>
-            <Download className="w-4 h-4" />
-            <AlertDescription>
-              <p className="font-medium mb-2">Extension not detected?</p>
-              <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Install the LinkedBot Chrome extension</li>
-                <li>Refresh this page</li>
-                <li>Click "Connect Extension"</li>
-              </ol>
-              <Button variant="outline" size="sm" className="mt-3" asChild>
-                <a
-                  href="https://chrome.google.com/webstore"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Get Extension
-                </a>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Removed install help - extension not on store yet */}
       </CardContent>
     </Card>
   );

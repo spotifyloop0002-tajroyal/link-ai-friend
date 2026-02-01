@@ -36,9 +36,9 @@ const ChromeExtension = () => {
               The LinkedBot Chrome extension is the bridge between our AI and your LinkedIn profile. 
               It handles posting securely and naturally.
             </p>
-            <Button variant="gradient" size="lg">
-              Install Extension
-            </Button>
+            <p className="text-sm text-muted-foreground">
+              Extension coming soon to Chrome Web Store
+            </p>
           </div>
           
           <div className="grid md:grid-cols-3 gap-6">

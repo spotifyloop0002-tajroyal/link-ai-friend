@@ -102,36 +102,7 @@ export const ExtensionStatus: React.FC = () => {
     );
   }
 
-  if (!isInstalled) {
-    return (
-      <Card className="bg-card border-border">
-        <CardContent className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0">
-              <Download className="w-8 h-8 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Install Chrome Extension
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Install the Chrome extension to automatically post your scheduled content to LinkedIn.
-              </p>
-              <Button
-                onClick={() => window.open(import.meta.env.VITE_EXTENSION_STORE_URL || 'https://chrome.google.com/webstore', '_blank')}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Install Extension
-              </Button>
-              <p className="text-sm text-muted-foreground mt-3">
-                After installing, refresh this page to connect.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Skip install check - just show connect UI if not connected
 
   if (!isConnected) {
     return (
