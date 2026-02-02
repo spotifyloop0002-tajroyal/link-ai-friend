@@ -1,4 +1,4 @@
-// Chrome Extension Event Types - v4.0 (Simplified)
+// Chrome Extension Event Types - v5.0 (Auto Analytics Scraping)
 
 export type ExtensionEventType = 
   | 'postScheduled'
@@ -13,7 +13,8 @@ export type ExtensionEventType =
   | 'analyticsUpdated'
   | 'alarmFired'
   | 'extensionConnected'
-  | 'extensionDisconnected';
+  | 'extensionDisconnected'
+  | 'extensionReadyForScraping';
 
 export interface ExtensionEventData {
   postId?: string;
@@ -30,6 +31,73 @@ export interface ExtensionEventData {
     comments: number;
     shares: number;
   };
+}
+
+// v5.0 - Analytics scraping types
+export interface AnalyticsScrapeResult {
+  url: string;
+  views: number;
+  likes: number;
+  comments: number;
+  reposts: number;
+  scrapedAt: string;
+}
+
+export interface SingleAnalyticsResult {
+  success: boolean;
+  postUrl: string;
+  analytics?: AnalyticsScrapeResult;
+  error?: string;
+}
+
+export interface BulkAnalyticsResult {
+  success: boolean;
+  results: Array<{
+    success: boolean;
+    url: string;
+    analytics?: AnalyticsScrapeResult;
+    error?: string;
+  }>;
+  total: number;
+  successful: number;
+  error?: string;
+}
+
+// v5.0 - New message types for analytics scraping
+export interface ScrapeAnalyticsMessage {
+  type: 'SCRAPE_ANALYTICS';
+  postUrl: string;
+}
+
+export interface ScrapeBulkAnalyticsMessage {
+  type: 'SCRAPE_BULK_ANALYTICS';
+  postUrls: string[];
+}
+
+export interface AnalyticsResultMessage {
+  type: 'ANALYTICS_RESULT';
+  success: boolean;
+  postUrl: string;
+  analytics?: AnalyticsScrapeResult;
+  error?: string;
+}
+
+export interface BulkAnalyticsResultMessage {
+  type: 'BULK_ANALYTICS_RESULT';
+  success: boolean;
+  results: Array<{
+    success: boolean;
+    url: string;
+    analytics?: AnalyticsScrapeResult;
+    error?: string;
+  }>;
+  total: number;
+  successful: number;
+  error?: string;
+}
+
+export interface ExtensionReadyForScrapingMessage {
+  type: 'EXTENSION_READY_FOR_SCRAPING';
 }
 
 export interface ExtensionEvent {
@@ -109,4 +177,9 @@ export type ExtensionMessage =
   | SchedulePostsMessage
   | ScheduleResultMessage
   | PostNowMessage
-  | PostResultMessage;
+  | PostResultMessage
+  | ScrapeAnalyticsMessage
+  | ScrapeBulkAnalyticsMessage
+  | AnalyticsResultMessage
+  | BulkAnalyticsResultMessage
+  | ExtensionReadyForScrapingMessage;

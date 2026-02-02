@@ -1,9 +1,8 @@
-// LinkedBot Extension Bridge v4.0
-// Simplified - NO auth, NO user_id
-// Extension handles LinkedIn posting directly
+// LinkedBot Extension Bridge v5.0
+// Supports automatic analytics scraping + all v4.x features
 
 const EXTENSION_CONFIG = {
-  version: '4.0',
+  version: '5.0',
   supabaseUrl: 'https://glrgfnqdzwbpkcsoxsgd.supabase.co',
 };
 
@@ -12,7 +11,7 @@ window.LinkedBotBridge = {
 
   // Called by extension when post is published successfully
   onPostPublished: function(data) {
-    console.log('🔗 Bridge v4.0: Post published', data);
+    console.log('🔗 Bridge v5.0: Post published', data);
     
     window.dispatchEvent(new CustomEvent('linkedbot:post-published', {
       detail: {
@@ -39,7 +38,7 @@ window.LinkedBotBridge = {
   
   // Called by extension when post fails
   onPostFailed: function(data) {
-    console.log('🔗 Bridge v4.0: Post failed', data);
+    console.log('🔗 Bridge v5.0: Post failed', data);
     
     window.dispatchEvent(new CustomEvent('linkedbot:post-failed', {
       detail: {
@@ -65,7 +64,7 @@ window.LinkedBotBridge = {
   
   // Post scheduled
   onPostScheduled: function(data) {
-    console.log('🔗 Bridge v4.0: Post scheduled', data);
+    console.log('🔗 Bridge v5.0: Post scheduled', data);
     
     window.postMessage({
       type: 'EXTENSION_EVENT',
@@ -81,7 +80,7 @@ window.LinkedBotBridge = {
   
   // Post starting
   onPostStarting: function(data) {
-    console.log('🔗 Bridge v4.0: Post starting', data);
+    console.log('🔗 Bridge v5.0: Post starting', data);
     
     window.postMessage({
       type: 'EXTENSION_EVENT',
@@ -96,7 +95,7 @@ window.LinkedBotBridge = {
   
   // Post filling
   onPostFilling: function(data) {
-    console.log('🔗 Bridge v4.0: Post filling', data);
+    console.log('🔗 Bridge v5.0: Post filling', data);
     
     window.postMessage({
       type: 'EXTENSION_EVENT',
@@ -111,7 +110,7 @@ window.LinkedBotBridge = {
   
   // Queue updated
   onQueueUpdated: function(data) {
-    console.log('🔗 Bridge v4.0: Queue updated', data);
+    console.log('🔗 Bridge v5.0: Queue updated', data);
     
     window.postMessage({
       type: 'EXTENSION_EVENT',
@@ -125,7 +124,7 @@ window.LinkedBotBridge = {
   
   // Notify backend of successful post (NO user_id required)
   notifyPostSuccess: async function(data) {
-    console.log('🔗 Bridge v4.0: notifyPostSuccess', data);
+    console.log('🔗 Bridge v5.0: notifyPostSuccess', data);
     try {
       const payload = {
         postId: data.postId,
@@ -142,10 +141,10 @@ window.LinkedBotBridge = {
       });
       
       const result = await response.json();
-      console.log('🔗 Bridge v4.0: sync-post response:', result);
+      console.log('🔗 Bridge v5.0: sync-post response:', result);
       return result;
     } catch (error) {
-      console.error('🔗 Bridge v4.0: Failed to notify backend:', error);
+      console.error('🔗 Bridge v5.0: Failed to notify backend:', error);
       return { success: false, error: error.message };
     }
   },
@@ -165,15 +164,15 @@ window.LinkedBotBridge = {
       });
       
       const result = await response.json();
-      console.log('🔗 Bridge v4.0: Backend notified of failure:', result);
+      console.log('🔗 Bridge v5.0: Backend notified of failure:', result);
     } catch (error) {
-      console.error('🔗 Bridge v4.0: Failed to notify backend:', error);
+      console.error('🔗 Bridge v5.0: Failed to notify backend:', error);
     }
   },
 
-  // Analytics updated
+  // v5.0 - Analytics updated (called by extension after scraping)
   onAnalyticsUpdated: function(data) {
-    console.log('🔗 Bridge v4.0: Analytics updated', data);
+    console.log('🔗 Bridge v5.0: Analytics updated', data);
     
     window.dispatchEvent(new CustomEvent('linkedbot:analytics-updated', {
       detail: data
@@ -190,9 +189,45 @@ window.LinkedBotBridge = {
     }, '*');
   },
 
+  // v5.0 - Called by extension when it's ready for analytics scraping
+  onReadyForScraping: function() {
+    console.log('🔗 Bridge v5.0: Extension ready for scraping');
+    
+    window.postMessage({
+      type: 'EXTENSION_READY_FOR_SCRAPING'
+    }, '*');
+  },
+
+  // v5.0 - Called by extension with single analytics result
+  onAnalyticsResult: function(data) {
+    console.log('🔗 Bridge v5.0: Analytics result', data);
+    
+    window.postMessage({
+      type: 'ANALYTICS_RESULT',
+      success: data.success,
+      postUrl: data.postUrl || data.url,
+      analytics: data.analytics,
+      error: data.error
+    }, '*');
+  },
+
+  // v5.0 - Called by extension with bulk analytics results
+  onBulkAnalyticsResult: function(data) {
+    console.log('🔗 Bridge v5.0: Bulk analytics result', data);
+    
+    window.postMessage({
+      type: 'BULK_ANALYTICS_RESULT',
+      success: data.success,
+      results: data.results,
+      total: data.total,
+      successful: data.successful,
+      error: data.error
+    }, '*');
+  },
+
   // Connection status changed
   onConnectionStatusChanged: function(data) {
-    console.log('🔗 Bridge v4.0: Connection status changed', data);
+    console.log('🔗 Bridge v5.0: Connection status changed', data);
     
     window.dispatchEvent(new CustomEvent('linkedbot:connection-changed', {
       detail: data
@@ -203,11 +238,18 @@ window.LinkedBotBridge = {
       extensionId: data.extensionId,
       version: this.version
     }, '*');
+    
+    // v5.0 - If connected, also signal ready for scraping
+    if (data.connected) {
+      setTimeout(() => {
+        this.onReadyForScraping();
+      }, 1000);
+    }
   },
 
   // Error handler
   onError: function(data) {
-    console.error('🔗 Bridge v4.0: Error', data);
+    console.error('🔗 Bridge v5.0: Error', data);
     window.dispatchEvent(new CustomEvent('linkedbot:error', {
       detail: data
     }));
@@ -224,9 +266,9 @@ window.addEventListener('message', (event) => {
   
   const message = event.data;
   
-  // v4.0 - POST_NOW (simplified, NO user_id)
+  // POST_NOW (simplified, NO user_id)
   if (message.type === 'POST_NOW') {
-    console.log('🔗 Bridge v4.0: POST_NOW received', message.post);
+    console.log('🔗 Bridge v5.0: POST_NOW received', message.post);
     
     // Forward to extension via custom event
     window.dispatchEvent(new CustomEvent('linkedbot:post-now', {
@@ -238,9 +280,9 @@ window.addEventListener('message', (event) => {
     }));
   }
   
-  // v4.0 - SCHEDULE_POSTS (simplified, NO user_id)
+  // SCHEDULE_POSTS (simplified, NO user_id)
   if (message.type === 'SCHEDULE_POSTS') {
-    console.log('🔗 Bridge v4.0: SCHEDULE_POSTS received', message.posts);
+    console.log('🔗 Bridge v5.0: SCHEDULE_POSTS received', message.posts);
     
     // Forward to extension via custom event
     window.dispatchEvent(new CustomEvent('linkedbot:schedule-posts', {
@@ -266,7 +308,7 @@ window.addEventListener('message', (event) => {
   
   // CHECK_EXTENSION
   if (message.type === 'CHECK_EXTENSION') {
-    console.log('🔗 Bridge v4.0: CHECK_EXTENSION');
+    console.log('🔗 Bridge v5.0: CHECK_EXTENSION');
     
     // Check if extension has registered
     const extensionConnected = localStorage.getItem('extension_connected') === 'true';
@@ -281,7 +323,7 @@ window.addEventListener('message', (event) => {
   
   // CONNECT_EXTENSION
   if (message.type === 'CONNECT_EXTENSION') {
-    console.log('🔗 Bridge v4.0: CONNECT_EXTENSION');
+    console.log('🔗 Bridge v5.0: CONNECT_EXTENSION');
     
     window.dispatchEvent(new CustomEvent('linkedbot:connect-request', {
       detail: {}
@@ -290,7 +332,7 @@ window.addEventListener('message', (event) => {
   
   // DISCONNECT_EXTENSION
   if (message.type === 'DISCONNECT_EXTENSION') {
-    console.log('🔗 Bridge v4.0: DISCONNECT_EXTENSION');
+    console.log('🔗 Bridge v5.0: DISCONNECT_EXTENSION');
     
     localStorage.removeItem('extension_connected');
     localStorage.removeItem('extension_id');
@@ -300,18 +342,27 @@ window.addEventListener('message', (event) => {
     }, '*');
   }
   
-  // SCRAPE_ANALYTICS
+  // v5.0 - SCRAPE_ANALYTICS (single post)
   if (message.type === 'SCRAPE_ANALYTICS') {
-    console.log('🔗 Bridge v4.0: SCRAPE_ANALYTICS');
+    console.log('🔗 Bridge v5.0: SCRAPE_ANALYTICS', message.postUrl);
     
     window.dispatchEvent(new CustomEvent('linkedbot:scrape-analytics', {
-      detail: {}
+      detail: { postUrl: message.postUrl }
+    }));
+  }
+  
+  // v5.0 - SCRAPE_BULK_ANALYTICS (multiple posts)
+  if (message.type === 'SCRAPE_BULK_ANALYTICS') {
+    console.log('🔗 Bridge v5.0: SCRAPE_BULK_ANALYTICS', message.postUrls?.length, 'posts');
+    
+    window.dispatchEvent(new CustomEvent('linkedbot:scrape-bulk-analytics', {
+      detail: { postUrls: message.postUrls }
     }));
   }
   
   // SCAN_POSTS
   if (message.type === 'SCAN_POSTS') {
-    console.log('🔗 Bridge v4.0: SCAN_POSTS', message.limit);
+    console.log('🔗 Bridge v5.0: SCAN_POSTS', message.limit);
     
     window.dispatchEvent(new CustomEvent('linkedbot:scan-posts', {
       detail: { limit: message.limit || 50 }
@@ -319,4 +370,4 @@ window.addEventListener('message', (event) => {
   }
 });
 
-console.log('🔗 LinkedBot Bridge v4.0 loaded (simplified - no auth)');
+console.log('🔗 LinkedBot Bridge v5.0 loaded (auto analytics scraping)');

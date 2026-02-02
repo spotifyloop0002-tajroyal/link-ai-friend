@@ -1,13 +1,29 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { AnalyticsScrapeResult, BulkAnalyticsResultMessage } from '@/types/extension';
 
 // ============================================================================
-// SCRAPE ALL POST ANALYTICS
+// v5.0 - ANALYTICS SCRAPING WITH AUTO-TRIGGER ON EXTENSION READY
+// ============================================================================
+
+let extensionConnected = false;
+let cronInterval: ReturnType<typeof setInterval> | null = null;
+let isScrapingInProgress = false;
+
+// ============================================================================
+// SCRAPE ALL POST ANALYTICS (v5.0 BULK)
 // ============================================================================
 
 export async function scrapeAllPostAnalytics() {
-  console.log('📊 Starting analytics scraping cron job');
+  if (isScrapingInProgress) {
+    console.log('📊 Scraping already in progress, skipping...');
+    return;
+  }
+
+  console.log('📊 Starting v5.0 bulk analytics scraping');
   
   try {
+    isScrapingInProgress = true;
+    
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -21,11 +37,12 @@ export async function scrapeAllPostAnalytics() {
     
     const { data: posts, error } = await supabase
       .from('posts')
-      .select('*')
+      .select('id, linkedin_post_url')
       .eq('user_id', user.id)
       .not('linkedin_post_url', 'is', null)
       .gte('created_at', thirtyDaysAgo.toISOString())
-      .eq('status', 'posted');
+      .eq('status', 'posted')
+      .order('posted_at', { ascending: false });
     
     if (error) {
       console.error('Failed to fetch posts:', error);
@@ -37,131 +54,170 @@ export async function scrapeAllPostAnalytics() {
       return;
     }
     
-    console.log(`📊 Scraping analytics for ${posts.length} posts`);
+    // Extract URLs (max 30 to avoid rate limits)
+    const postUrls = posts
+      .map(p => p.linkedin_post_url)
+      .filter((url): url is string => url !== null)
+      .slice(0, 30);
     
-    // Process each post
-    for (const post of posts) {
-      try {
-        const result = await scrapePostAnalytics(post.linkedin_post_url!, post.id);
-        
-        if (result.success && result.analytics) {
-          // Update database with new analytics
-          const { error: updateError } = await supabase
-            .from('posts')
-            .update({
-              views_count: result.analytics.views,
-              likes_count: result.analytics.likes,
-              comments_count: result.analytics.comments,
-              shares_count: result.analytics.reposts,
-              last_synced_at: new Date().toISOString()
-            })
-            .eq('id', post.id);
-          
-          if (updateError) {
-            console.error(`Failed to update post ${post.id}:`, updateError);
-          } else {
-            console.log(`✅ Analytics updated for post ${post.id}`);
-          }
-        }
-        
-        // Wait 5 seconds between posts to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-      } catch (error) {
-        console.error(`❌ Failed to scrape post ${post.id}:`, error);
-      }
-    }
+    console.log(`📊 Requesting bulk scrape for ${postUrls.length} posts...`);
     
-    console.log('✅ Analytics scraping complete');
+    // v5.0 - Send bulk scrape request
+    window.postMessage({
+      type: 'SCRAPE_BULK_ANALYTICS',
+      postUrls: postUrls
+    }, '*');
     
   } catch (error) {
-    console.error('❌ Analytics cron job failed:', error);
+    console.error('❌ Analytics scrape initiation failed:', error);
+  } finally {
+    // Reset after timeout (in case no response)
+    setTimeout(() => {
+      isScrapingInProgress = false;
+    }, 120000); // 2 minute timeout
   }
 }
 
 // ============================================================================
-// SCRAPE SINGLE POST ANALYTICS
+// HANDLE ANALYTICS RESULTS
 // ============================================================================
 
-interface AnalyticsResult {
-  success: boolean;
-  analytics?: {
-    views: number;
-    likes: number;
-    comments: number;
-    reposts: number;
-  };
-  error?: string;
+async function handleAnalyticsResults(data: BulkAnalyticsResultMessage) {
+  isScrapingInProgress = false;
+  
+  if (!data.success) {
+    console.error('❌ Bulk scraping failed:', data.error);
+    return;
+  }
+  
+  console.log(`📊 Received analytics for ${data.successful}/${data.total} posts`);
+  
+  // Update each post in database
+  for (const result of data.results) {
+    if (result.success && result.analytics) {
+      await updatePostAnalytics(result.url, result.analytics);
+    }
+  }
+  
+  console.log('✅ Analytics scraping complete');
 }
 
-async function scrapePostAnalytics(linkedinUrl: string, postId: string): Promise<AnalyticsResult> {
-  return new Promise<AnalyticsResult>((resolve) => {
-    console.log('📊 Requesting analytics for:', linkedinUrl);
+async function handleSingleAnalyticsResult(data: { 
+  success: boolean; 
+  postUrl: string; 
+  analytics?: AnalyticsScrapeResult; 
+  error?: string 
+}) {
+  if (!data.success) {
+    console.error(`❌ Scraping failed for ${data.postUrl}:`, data.error);
+    return;
+  }
+  
+  if (data.analytics) {
+    await updatePostAnalytics(data.postUrl, data.analytics);
+  }
+}
+
+// ============================================================================
+// UPDATE DATABASE WITH ANALYTICS
+// ============================================================================
+
+async function updatePostAnalytics(postUrl: string, analytics: AnalyticsScrapeResult) {
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .update({
+        views_count: analytics.views,
+        likes_count: analytics.likes,
+        comments_count: analytics.comments,
+        shares_count: analytics.reposts,
+        last_synced_at: analytics.scrapedAt
+      })
+      .eq('linkedin_post_url', postUrl);
     
-    // Send message to extension
-    window.postMessage({
-      type: 'SCRAPE_ANALYTICS',
-      url: linkedinUrl,
-      postId: postId
-    }, '*');
+    if (error) {
+      console.error('Update failed:', error);
+    } else {
+      console.log('✅ Updated analytics for:', postUrl.substring(0, 50) + '...');
+    }
+  } catch (error) {
+    console.error('Failed to update analytics:', error);
+  }
+}
+
+// ============================================================================
+// v5.0 MESSAGE LISTENERS
+// ============================================================================
+
+function setupMessageListeners() {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
     
-    // Listen for response
-    const handleResponse = (event: MessageEvent) => {
-      if (event.data.type === 'ANALYTICS_RESULT' && event.data.postId === postId) {
-        window.removeEventListener('message', handleResponse);
-        
-        if (event.data.success) {
-          resolve({
-            success: true,
-            analytics: event.data.data?.analytics
-          });
-        } else {
-          resolve({
-            success: false,
-            error: event.data.data?.error || 'Failed to scrape'
-          });
-        }
-      }
-    };
+    const message = event.data;
     
-    window.addEventListener('message', handleResponse);
+    // v5.0 - Extension signals ready for scraping
+    if (message.type === 'EXTENSION_READY_FOR_SCRAPING') {
+      console.log('🚀 Extension ready for scraping - triggering auto-scrape...');
+      extensionConnected = true;
+      
+      // Short delay to allow UI to settle
+      setTimeout(() => {
+        scrapeAllPostAnalytics();
+      }, 2000);
+    }
     
-    // Timeout after 60 seconds
-    setTimeout(() => {
-      window.removeEventListener('message', handleResponse);
-      resolve({ 
-        success: false, 
-        error: 'Timeout waiting for analytics' 
-      });
-    }, 60000);
+    // Also handle EXTENSION_CONNECTED for backward compatibility
+    if (message.type === 'EXTENSION_CONNECTED') {
+      extensionConnected = true;
+    }
+    
+    if (message.type === 'EXTENSION_DISCONNECTED') {
+      extensionConnected = false;
+    }
+    
+    // v5.0 - Handle bulk analytics result
+    if (message.type === 'BULK_ANALYTICS_RESULT') {
+      handleAnalyticsResults(message as BulkAnalyticsResultMessage);
+    }
+    
+    // v5.0 - Handle single analytics result
+    if (message.type === 'ANALYTICS_RESULT') {
+      handleSingleAnalyticsResult(message);
+    }
   });
 }
 
 // ============================================================================
-// START CRON JOB
+// START/STOP CRON JOB
 // ============================================================================
 
-let cronInterval: ReturnType<typeof setInterval> | null = null;
-
-// Run every 2 hours
 export function startAnalyticsCron() {
-  // Prevent multiple intervals
+  // Prevent multiple initializations
   if (cronInterval) {
     console.log('⏰ Analytics cron already running');
     return;
   }
 
-  console.log('⏰ Starting analytics cron job (every 2 hours)');
+  console.log('⏰ Starting v5.0 analytics cron (auto-scrape + every 2 hours)');
   
-  // Run after a short delay to allow user auth to complete
+  // Setup message listeners
+  setupMessageListeners();
+  
+  // Run initial scrape after delay (if extension already connected)
   setTimeout(() => {
-    scrapeAllPostAnalytics();
-  }, 10000); // 10 second initial delay
+    if (extensionConnected) {
+      scrapeAllPostAnalytics();
+    }
+  }, 5000);
   
   // Then run every 2 hours
   cronInterval = setInterval(() => {
-    scrapeAllPostAnalytics();
-  }, 2 * 60 * 60 * 1000); // 2 hours in milliseconds
+    if (extensionConnected) {
+      scrapeAllPostAnalytics();
+    } else {
+      console.log('⏰ Extension not connected - skipping scheduled scrape');
+    }
+  }, 2 * 60 * 60 * 1000); // 2 hours
 }
 
 export function stopAnalyticsCron() {
@@ -170,4 +226,36 @@ export function stopAnalyticsCron() {
     cronInterval = null;
     console.log('⏰ Analytics cron stopped');
   }
+}
+
+// ============================================================================
+// MANUAL TRIGGER (for UI button)
+// ============================================================================
+
+export function triggerManualScrape() {
+  if (!extensionConnected) {
+    console.warn('Cannot scrape - extension not connected');
+    return false;
+  }
+  
+  scrapeAllPostAnalytics();
+  return true;
+}
+
+// ============================================================================
+// SCRAPE SINGLE POST (on-demand)
+// ============================================================================
+
+export function scrapeSinglePost(postUrl: string) {
+  if (!extensionConnected) {
+    console.warn('Cannot scrape - extension not connected');
+    return false;
+  }
+  
+  window.postMessage({
+    type: 'SCRAPE_ANALYTICS',
+    postUrl: postUrl
+  }, '*');
+  
+  return true;
 }

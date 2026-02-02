@@ -384,6 +384,14 @@ declare global {
       scanPosts: (limit?: number) => Promise<{ success: boolean; posts?: any[]; error?: string }>;
       scrapeProfile: (profileUrl: string) => Promise<{ success: boolean; data?: any; error?: string }>;
       scrapeAnalytics: () => Promise<{ success: boolean; data?: any; error?: string }>;
+      // v5.0 - Bulk analytics scraping
+      scrapeBulkAnalytics: (postUrls: string[]) => Promise<{ success: boolean; results?: any[]; total?: number; successful?: number; error?: string }>;
+    };
+    LinkedBotBridge?: {
+      version: string;
+      onReadyForScraping: () => void;
+      onAnalyticsResult: (data: any) => void;
+      onBulkAnalyticsResult: (data: any) => void;
     };
   }
 }

@@ -1,22 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import type { ExtensionEventType } from '@/types/extension';
 
-// Event types from the Chrome extension
-export type ExtensionEventType = 
-  | 'postScheduled'
-  | 'postStarting'
-  | 'postFilling'
-  | 'postPublished'
-  | 'postSuccess'
-  | 'postFailed'
-  | 'postUrlFailed'
-  | 'postRetrying'
-  | 'queueUpdated'
-  | 'analyticsUpdated'
-  | 'alarmFired'
-  | 'extensionConnected'
-  | 'extensionDisconnected';
+// Re-export for backward compatibility
+export type { ExtensionEventType } from '@/types/extension';
 
 export interface ExtensionEventData {
   postId?: string;
@@ -160,6 +148,20 @@ export const useExtensionEvents = () => {
         });
       }
       
+      // v5.0 - Extension ready for analytics scraping
+      if (message.type === 'EXTENSION_READY_FOR_SCRAPING') {
+        console.log('🚀 Extension ready for analytics scraping');
+        setStatus(prev => ({
+          ...prev,
+          connected: true,
+          message: '✅ Extension ready for scraping',
+        }));
+        
+        // Invalidate analytics to show fresh data when scraping completes
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
+        queryClient.invalidateQueries({ queryKey: ['linkedin-analytics'] });
+      }
+      
       if (message.type === 'EXTENSION_DISCONNECTED') {
         setStatus(prev => ({
           ...prev,
@@ -175,6 +177,36 @@ export const useExtensionEvents = () => {
           },
           duration: 10000,
         });
+      }
+      
+      // v5.0 - Bulk analytics result
+      if (message.type === 'BULK_ANALYTICS_RESULT') {
+        const { success, successful, total } = message;
+        
+        if (success) {
+          console.log(`📊 Bulk analytics scraped: ${successful}/${total}`);
+          
+          // Invalidate all analytics queries to refresh UI
+          queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
+          queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
+          queryClient.invalidateQueries({ queryKey: ['linkedin-analytics'], refetchType: 'all' });
+          
+          if (successful > 0) {
+            toast.success('Analytics Updated', {
+              description: `Updated ${successful} of ${total} posts`,
+            });
+          }
+        } else {
+          console.error('Bulk analytics scraping failed:', message.error);
+        }
+      }
+      
+      // v5.0 - Single analytics result
+      if (message.type === 'ANALYTICS_RESULT') {
+        if (message.success) {
+          queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
+          queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
+        }
       }
       
       // Extension events with detailed status updates
