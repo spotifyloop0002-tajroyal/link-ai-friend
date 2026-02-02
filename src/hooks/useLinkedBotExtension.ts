@@ -1,4 +1,4 @@
-// useLinkedBotExtension.ts - v4.0 (Simplified - NO auth/user_id)
+// useLinkedBotExtension.ts - v4.2 (Simplified - NO auth/user_id)
 // React hook for LinkedBot Chrome Extension Communication
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -382,6 +382,8 @@ declare global {
       postNow: (post: { id: string; content: string; imageUrl?: string }) => Promise<{ success: boolean; error?: string }>;
       schedulePosts: (posts: Array<{ id: string; content: string; imageUrl?: string; scheduleTime?: string }>) => Promise<{ success: boolean; queueLength?: number; error?: string }>;
       scanPosts: (limit?: number) => Promise<{ success: boolean; posts?: any[]; error?: string }>;
+      scrapeProfile: (profileUrl: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+      scrapeAnalytics: () => Promise<{ success: boolean; data?: any; error?: string }>;
     };
   }
 }

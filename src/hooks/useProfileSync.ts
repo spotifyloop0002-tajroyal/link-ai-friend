@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LinkedInProfileData } from '@/hooks/useUserProfile';
+// Import to ensure global Window type declarations are included
+import '@/hooks/useLinkedBotExtension';
 
 interface ProfileSyncResult {
   success: boolean;
