@@ -64,10 +64,10 @@ const CalendarPage = () => {
 
   const selectedDatePosts = selectedDate ? getPostsForDate(selectedDate) : [];
 
-  // Show ALL posts in list (scheduled + posted)
+  // Show ALL posts in list (pending + posting + posted)
   const filteredPosts = filterAgent === "all"
-    ? posts.filter(p => p.status === "scheduled" || p.status === "posted" || p.status === "queued_in_extension")
-    : posts.filter((post) => post.agent_name === filterAgent && (post.status === "scheduled" || post.status === "posted"));
+    ? posts.filter(p => p.status === "pending" || p.status === "posting" || p.status === "posted" || p.status === "failed")
+    : posts.filter((post) => post.agent_name === filterAgent && ["pending", "posting", "posted", "failed"].includes(post.status));
 
   const getAgentColor = (agentName: string | null) => {
     if (!agentName) return "bg-muted";

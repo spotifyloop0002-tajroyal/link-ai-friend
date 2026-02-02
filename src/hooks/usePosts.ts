@@ -209,8 +209,10 @@ export const usePosts = () => {
     };
   }, [fetchPosts]);
 
+  // Fetch all queued posts (pending + posting = not yet posted)
   const fetchScheduledPosts = useCallback(async () => {
-    return fetchPosts({ status: "scheduled" });
+    // Fetch all posts without status filter - let UI filter
+    return fetchPosts();
   }, [fetchPosts]);
 
   // Set post to "posting" state (optimistic UI before extension publishes)

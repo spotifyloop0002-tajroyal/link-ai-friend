@@ -61,14 +61,10 @@ interface ScheduledPost {
 const LINKEDIN_URL_PATTERN = /linkedin\.com\/(posts|feed).*activity[-:][0-9]{19}/;
 
 // Helper to determine display status
-function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pending' | 'scheduled_overdue' | 'scheduled' | 'failed' {
-  const now = new Date();
-  const scheduledTime = post.scheduled_time ? new Date(post.scheduled_time) : null;
-  const isOverdue = scheduledTime && scheduledTime < now;
-  
+// Maps database status to display status
+function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pending' | 'posting' | 'queued' | 'failed' {
   // If status is posted
   if (post.status === 'posted') {
-    // Check if we have a valid LinkedIn URL
     const hasValidUrl = post.linkedin_post_url && LINKEDIN_URL_PATTERN.test(post.linkedin_post_url);
     return hasValidUrl ? 'published' : 'posted_pending';
   }
@@ -78,12 +74,13 @@ function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pendin
     return 'failed';
   }
   
-  // If still scheduled but time has passed - should not show as scheduled
-  if (post.status === 'scheduled' && isOverdue) {
-    return 'scheduled_overdue';
+  // If actively posting
+  if (post.status === 'posting') {
+    return 'posting';
   }
   
-  return 'scheduled';
+  // pending = queued for posting
+  return 'queued';
 }
 
 const DashboardPage = () => {
@@ -106,7 +103,7 @@ const DashboardPage = () => {
         .from("posts")
         .select("id, content, scheduled_time, status, posted_at, linkedin_post_url, verified, tracking_id, views_count, likes_count, comments_count, shares_count, last_synced_at")
         .eq("user_id", user.id)
-        .in("status", ["scheduled", "posted", "failed"])
+        .in("status", ["pending", "posting", "posted", "failed"]) // v4.0 statuses
         .order("scheduled_time", { ascending: true })
         .limit(20);
 
@@ -256,9 +253,9 @@ const DashboardPage = () => {
     };
   }, [fetchPosts, updatePostAnalytics]);
 
-  // Calculate real stats - count scheduled + posted
+  // Calculate real stats - count pending + posted
   const totalViews = analyticsPosts.reduce((sum, p) => sum + (p.views || 0), 0);
-  const scheduledCount = scheduledPosts.filter(p => p.status === 'scheduled' || p.status === 'queued_in_extension').length;
+  const queuedCount = scheduledPosts.filter(p => p.status === 'pending' || p.status === 'posting').length;
   const postedCount = scheduledPosts.filter(p => p.status === 'posted').length;
   const activeAgentsCount = agents.filter(a => a.is_active).length;
 
@@ -278,8 +275,8 @@ const DashboardPage = () => {
       color: "from-secondary to-secondary/60",
     },
     {
-      label: "Upcoming Posts",
-      value: scheduledCount.toString(),
+      label: "Queued Posts",
+      value: queuedCount.toString(),
       subtitle: `${postedCount} already posted`,
       icon: Calendar,
       color: "from-warning to-warning/60",
@@ -460,11 +457,18 @@ const DashboardPage = () => {
                                   Posted (verifying)
                                 </Badge>
                               );
-                            case 'scheduled_overdue':
+                            case 'posting':
                               return (
-                                <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
+                                <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-blue-500/20 gap-1">
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                   Posting...
+                                </Badge>
+                              );
+                            case 'queued':
+                              return (
+                                <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Queued
                                 </Badge>
                               );
                             case 'failed':
@@ -476,9 +480,8 @@ const DashboardPage = () => {
                               );
                             default:
                               return (
-                                <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20 gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  Scheduled
+                                <Badge variant="secondary" className="gap-1">
+                                  {post.status}
                                 </Badge>
                               );
                           }
