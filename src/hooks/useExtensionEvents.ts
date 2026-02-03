@@ -130,7 +130,7 @@ export const useExtensionEvents = () => {
 
   useEffect(() => {
     // Handler for new postMessage-based events from webapp-content.js
-    const handleWindowMessage = (event: MessageEvent) => {
+    const handleWindowMessage = async (event: MessageEvent) => {
       if (event.source !== window) return;
       
       const message = event.data;
@@ -177,6 +177,111 @@ export const useExtensionEvents = () => {
           },
           duration: 10000,
         });
+      }
+      
+      // v5.0 - Handle POST_RESULT from extension (post success/failure with LinkedIn URL)
+      if (message.type === 'POST_RESULT') {
+        console.log('📨 POST_RESULT received:', message);
+        
+        const { success, postId, trackingId, linkedinUrl, postUrl, error } = message;
+        const actualUrl = linkedinUrl || postUrl;
+        const actualPostId = postId || trackingId;
+        
+        if (success && actualPostId) {
+          console.log('✅ Post successful, saving LinkedIn URL:', actualUrl);
+          
+          try {
+            // Import supabase dynamically to avoid circular deps
+            const { supabase } = await import('@/integrations/supabase/client');
+            
+            // Update post with LinkedIn URL and status
+            const updateData: Record<string, unknown> = {
+              status: 'posted',
+              posted_at: new Date().toISOString(),
+            };
+            
+            if (actualUrl) {
+              updateData.linkedin_post_url = actualUrl;
+              // Initialize analytics to 0 when URL is captured
+              updateData.views_count = 0;
+              updateData.likes_count = 0;
+              updateData.comments_count = 0;
+              updateData.shares_count = 0;
+            }
+            
+            const { error: updateError } = await supabase
+              .from('posts')
+              .update(updateData)
+              .eq('id', actualPostId);
+            
+            if (updateError) {
+              console.error('Failed to save LinkedIn URL:', updateError);
+            } else {
+              console.log('✅ LinkedIn URL saved to database:', actualUrl);
+            }
+            
+            // Update local status
+            if (actualPostId) {
+              updatePostStatus(actualPostId, {
+                status: 'posted',
+                message: 'Posted successfully!',
+                linkedinUrl: actualUrl,
+              });
+            }
+            
+            // Invalidate queries to refresh UI
+            queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
+            queryClient.invalidateQueries({ queryKey: ['scheduled-posts'], refetchType: 'all' });
+            queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
+            
+            // Show success toast with link to post
+            if (actualUrl) {
+              toast.success('Posted to LinkedIn! 🎉', {
+                description: 'Your post is live',
+                action: {
+                  label: 'View Post',
+                  onClick: () => window.open(actualUrl, '_blank'),
+                },
+              });
+            } else {
+              toast.success('Posted to LinkedIn!', {
+                description: 'Post created but URL not captured',
+              });
+            }
+          } catch (err) {
+            console.error('Error saving LinkedIn URL:', err);
+          }
+        } else if (!success) {
+          console.error('Post failed:', error);
+          
+          try {
+            const { supabase } = await import('@/integrations/supabase/client');
+            
+            // Update post status to failed
+            if (actualPostId) {
+              await supabase
+                .from('posts')
+                .update({ 
+                  status: 'failed',
+                  last_error: error || 'Unknown error',
+                })
+                .eq('id', actualPostId);
+              
+              updatePostStatus(actualPostId, {
+                status: 'failed',
+                message: error || 'Failed to post',
+              });
+            }
+            
+            queryClient.invalidateQueries({ queryKey: ['posts'] });
+          } catch (err) {
+            console.error('Error updating failed status:', err);
+          }
+          
+          toast.error('Failed to post to LinkedIn', {
+            description: error || 'Please try again',
+          });
+        }
       }
       
       // v5.0 - Bulk analytics result
