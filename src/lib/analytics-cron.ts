@@ -124,6 +124,14 @@ async function handleSingleAnalyticsResult(data: {
 
 async function updatePostAnalytics(postUrl: string, analytics: AnalyticsScrapeResult) {
   try {
+    console.log('💾 Updating post analytics:', {
+      url: postUrl.substring(0, 50) + '...',
+      views: analytics.views,
+      likes: analytics.likes,
+      comments: analytics.comments,
+      reposts: analytics.reposts
+    });
+
     const { error } = await supabase
       .from('posts')
       .update({
@@ -131,12 +139,12 @@ async function updatePostAnalytics(postUrl: string, analytics: AnalyticsScrapeRe
         likes_count: analytics.likes,
         comments_count: analytics.comments,
         shares_count: analytics.reposts,
-        last_synced_at: analytics.scrapedAt
+        last_synced_at: analytics.scrapedAt || new Date().toISOString()
       })
       .eq('linkedin_post_url', postUrl);
     
     if (error) {
-      console.error('Update failed:', error);
+      console.error('Update failed for', postUrl, ':', error);
     } else {
       console.log('✅ Updated analytics for:', postUrl.substring(0, 50) + '...');
     }

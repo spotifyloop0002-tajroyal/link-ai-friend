@@ -39,7 +39,7 @@ serve(async (req) => {
 
     console.log('📊 Fetching analytics for user:', userId);
 
-    // Get profile analytics
+    // Get profile analytics from linkedin_analytics table
     const { data: profile, error: profileError } = await supabase
       .from('linkedin_analytics')
       .select('*')
@@ -51,27 +51,51 @@ serve(async (req) => {
       throw profileError;
     }
 
-    // Get post analytics
-    const { data: posts, error: postsError } = await supabase
-      .from('post_analytics')
-      .select('*')
+    // v5.0: Fetch analytics from POSTS table (primary source)
+    // The extension now updates posts table directly with views_count, likes_count, etc.
+    const { data: postsWithAnalytics, error: postsError } = await supabase
+      .from('posts')
+      .select('id, content, linkedin_post_url, views_count, likes_count, comments_count, shares_count, last_synced_at, posted_at, status')
       .eq('user_id', userId)
-      .order('scraped_at', { ascending: false });
+      .eq('status', 'posted')
+      .not('linkedin_post_url', 'is', null)
+      .order('posted_at', { ascending: false })
+      .limit(50);
 
     if (postsError) {
       console.error('Posts fetch error:', postsError);
       throw postsError;
     }
 
-    console.log('✅ Analytics fetched:', { profile: !!profile, postsCount: posts?.length || 0 });
+    // Transform posts data to match the expected analytics format
+    const posts = (postsWithAnalytics || []).map(post => ({
+      id: post.id,
+      user_id: userId,
+      post_id: post.id,
+      content_preview: post.content?.substring(0, 200) || null,
+      linkedin_url: post.linkedin_post_url,
+      views: post.views_count || 0,
+      likes: post.likes_count || 0,
+      comments: post.comments_count || 0,
+      shares: post.shares_count || 0,
+      post_timestamp: post.posted_at,
+      scraped_at: post.last_synced_at,
+    }));
+
+    // Calculate last sync time from most recent post
+    const lastSyncTime = posts.length > 0 && posts[0].scraped_at 
+      ? posts[0].scraped_at 
+      : profile?.last_synced || null;
+
+    console.log('✅ Analytics fetched:', { profile: !!profile, postsCount: posts.length });
 
     return new Response(JSON.stringify({
       success: true,
       analytics: {
         profile: profile || null,
-        posts: posts || []
+        posts: posts
       },
-      lastSync: profile?.last_synced || null
+      lastSync: lastSyncTime
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
