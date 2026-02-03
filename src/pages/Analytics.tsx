@@ -28,6 +28,7 @@ import { Eye, Heart, MessageCircle, Share2, TrendingUp, Trophy, Bot, ExternalLin
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RefreshAnalyticsButton } from "@/components/analytics/RefreshAnalyticsButton";
 
 const formatNumber = (num: number): string => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -195,6 +196,12 @@ const AnalyticsPage = () => {
               {isConnected ? "Connected" : "Disconnected"}
             </Badge>
             
+            {/* v5.0 - Refresh Analytics Button for bulk scraping */}
+            <RefreshAnalyticsButton 
+              variant="outline" 
+              size="sm"
+            />
+            
             <Button
               onClick={handleSyncAnalytics}
               disabled={!isConnected || isSyncing}
@@ -206,7 +213,7 @@ const AnalyticsPage = () => {
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              {isSyncing ? "Syncing..." : "Sync Analytics"}
+              {isSyncing ? "Syncing..." : "Sync Profile"}
             </Button>
             
             <Select value={period} onValueChange={setPeriod}>

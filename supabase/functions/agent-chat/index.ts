@@ -609,9 +609,15 @@ function humanizePost(content: string): string {
 }
 
 // ============================================
-// PARSE SCHEDULE TIME (IST)
+// PARSE SCHEDULE TIME (IST) - ENHANCED WITH CLEAR FEEDBACK
 // ============================================
-function parseScheduleTimeIST(timeText: string): string | null {
+interface ParsedScheduleTime {
+  time: string;
+  message: string;
+  wasRescheduled: boolean;
+}
+
+function parseScheduleTimeIST(timeText: string): ParsedScheduleTime | null {
   const lower = timeText.toLowerCase().trim();
   const now = new Date();
   
@@ -622,14 +628,46 @@ function parseScheduleTimeIST(timeText: string): string | null {
   let result = new Date(istNow);
   result.setSeconds(0, 0);
   
+  // Check if "tomorrow" is explicitly mentioned
+  const isTomorrowExplicit = lower.includes('tomorrow');
+  
   // Handle relative day references
-  if (lower.includes('tomorrow')) {
+  if (isTomorrowExplicit) {
     result.setDate(result.getDate() + 1);
+  }
+  
+  // Handle "in X hours/minutes" patterns
+  const inHoursMatch = lower.match(/in\s+(\d+)\s+hours?/i);
+  const inMinutesMatch = lower.match(/in\s+(\d+)\s+minutes?/i);
+  
+  if (inHoursMatch) {
+    const hours = parseInt(inHoursMatch[1]);
+    result = new Date(istNow.getTime() + hours * 60 * 60 * 1000);
+    const utcTime = new Date(result.getTime() - istOffset);
+    const timeStr = result.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return {
+      time: utcTime.toISOString(),
+      message: `Scheduled for ${timeStr} IST (in ${hours} hour${hours > 1 ? 's' : ''})`,
+      wasRescheduled: false,
+    };
+  }
+  
+  if (inMinutesMatch) {
+    const minutes = parseInt(inMinutesMatch[1]);
+    result = new Date(istNow.getTime() + minutes * 60 * 1000);
+    const utcTime = new Date(result.getTime() - istOffset);
+    const timeStr = result.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return {
+      time: utcTime.toISOString(),
+      message: `Scheduled for ${timeStr} IST (in ${minutes} minute${minutes > 1 ? 's' : ''})`,
+      wasRescheduled: false,
+    };
   }
   
   // Extract time (e.g., "3:42 pm", "15:30", "3pm")
   let hours = 9; // Default to 9am
   let minutes = 0;
+  let timeFound = false;
   
   // Match patterns like "3:42 pm", "3:42pm", "15:30"
   const timeMatch = lower.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
@@ -640,6 +678,7 @@ function parseScheduleTimeIST(timeText: string): string | null {
     
     if (ampm === 'pm' && hours < 12) hours += 12;
     if (ampm === 'am' && hours === 12) hours = 0;
+    timeFound = true;
   } else {
     // Match patterns like "3pm", "3 pm"
     const simpleTimeMatch = lower.match(/(\d{1,2})\s*(am|pm)/i);
@@ -649,19 +688,29 @@ function parseScheduleTimeIST(timeText: string): string | null {
       
       if (ampm === 'pm' && hours < 12) hours += 12;
       if (ampm === 'am' && hours === 12) hours = 0;
+      timeFound = true;
     }
   }
   
   // Handle relative times of day
-  if (lower.includes('morning') && !timeMatch) {
-    hours = 9;
-    minutes = 0;
-  } else if (lower.includes('afternoon') && !timeMatch) {
-    hours = 14;
-    minutes = 0;
-  } else if (lower.includes('evening') && !timeMatch) {
-    hours = 18;
-    minutes = 0;
+  if (!timeFound) {
+    if (lower.includes('morning')) {
+      hours = 9;
+      minutes = 0;
+      timeFound = true;
+    } else if (lower.includes('afternoon')) {
+      hours = 14;
+      minutes = 0;
+      timeFound = true;
+    } else if (lower.includes('evening')) {
+      hours = 18;
+      minutes = 0;
+      timeFound = true;
+    }
+  }
+  
+  if (!timeFound) {
+    return null; // No valid time found
   }
   
   result.setHours(hours, minutes, 0, 0);
@@ -669,13 +718,33 @@ function parseScheduleTimeIST(timeText: string): string | null {
   // Convert back to UTC for storage
   const utcTime = new Date(result.getTime() - istOffset);
   
-  // If the time is in the past for today, return null or adjust
-  if (utcTime <= now && !lower.includes('tomorrow')) {
-    // If time is past, assume tomorrow
+  // Format time for display
+  const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayMinutes = minutes.toString().padStart(2, '0');
+  const timeStr = `${displayHours}:${displayMinutes} ${ampm}`;
+  
+  // Check if time is in the past for today
+  if (utcTime <= now && !isTomorrowExplicit) {
+    // Time has passed today - reschedule for tomorrow
     utcTime.setDate(utcTime.getDate() + 1);
+    result.setDate(result.getDate() + 1);
+    
+    return {
+      time: utcTime.toISOString(),
+      message: `⚠️ That time (${timeStr}) has already passed today. I've scheduled it for **tomorrow at ${timeStr} IST** instead.`,
+      wasRescheduled: true,
+    };
   }
   
-  return utcTime.toISOString();
+  // Time is valid for today or explicitly tomorrow
+  const dayLabel = isTomorrowExplicit ? 'tomorrow' : 'today';
+  
+  return {
+    time: utcTime.toISOString(),
+    message: `Scheduled for ${dayLabel} at ${timeStr} IST`,
+    wasRescheduled: false,
+  };
 }
 
 function formatScheduledTimeIST(isoString: string): string {
@@ -1235,40 +1304,49 @@ Or would you prefer different topics/timing?`;
         } else {
           const timeText = intent.data?.timeText || message;
           
-          // Parse the time for auto-scheduling
-          const parsedTime = parseScheduleTimeIST(timeText);
+          // Parse the time for auto-scheduling (now returns ParsedScheduleTime object with clear feedback)
+          const parseResult = parseScheduleTimeIST(timeText);
           
-          if (parsedTime) {
-            const scheduledDate = new Date(parsedTime);
-            const now = new Date();
-            
-            // Validate time is in the future
-            if (scheduledDate <= now) {
-              response = `⚠️ That time (${formatScheduledTimeIST(parsedTime)}) has already passed.\n\nPlease provide a future time like:\n• "today at 5pm"\n• "tomorrow at 9am"\n• "next Monday at 2pm"`;
-              break;
-            }
-            
-            const postToSchedule = generatedPosts[0];
-            
-            // CRITICAL: Use "sending" language, NOT "scheduled" until extension confirms
-            response = `📅 **Scheduling Request**\n\nTime: **${formatScheduledTimeIST(parsedTime)}**\n\n✅ Sending to Chrome extension now...\n\n⚠️ **Important:** The post will be marked as "scheduled" only after the extension confirms receipt. I'll update you on the status.`;
-            action = "auto_schedule";
-            
-            // Return with parsed time and post data
-            return new Response(
-              JSON.stringify({
-                type: "auto_schedule",
-                message: response,
-                posts: [],
-                action: "auto_schedule",
-                scheduledTime: parsedTime,
-                postToSchedule: postToSchedule,
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          } else {
-            response = `I couldn't understand that time. Please be specific:\n\n✓ "today at 3:30 PM"\n✓ "tomorrow at 9 AM"\n✓ "post it at 2pm"\n\n❌ Avoid: "sometime later", "in a bit", "2 or 3 pm"`;
+          if (!parseResult) {
+            response = `I couldn't understand that time format. Please use:\n• "today at 3:30 PM"\n• "tomorrow at 9 AM"\n• "in 2 hours"\n• "morning" / "afternoon" / "evening"`;
+            break;
           }
+          
+          const scheduledDate = new Date(parseResult.time);
+          const now = new Date();
+          
+          // Validate time is at least 2 minutes in the future
+          const twoMinutesFromNow = new Date(now.getTime() + 2 * 60 * 1000);
+          if (scheduledDate < twoMinutesFromNow) {
+            response = `⚠️ Please schedule at least 2 minutes from now to ensure successful posting.\n\nTry:\n• "today at ${new Date(now.getTime() + 10 * 60 * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}"\n• "in 10 minutes"`;
+            break;
+          }
+          
+          const postToSchedule = generatedPosts[0];
+          const parsedTime = parseResult.time;
+          
+          // Include clear feedback about rescheduling if time was in the past
+          let responseMessage = parseResult.wasRescheduled
+            ? `${parseResult.message}\n\n✅ Sending to Chrome extension now...`
+            : `📅 **${parseResult.message}**\n\n✅ Sending to Chrome extension now...`;
+          
+          response = responseMessage;
+          action = "auto_schedule";
+          
+          // Return with parsed time and post data
+          return new Response(
+            JSON.stringify({
+              type: "auto_schedule",
+              message: response,
+              posts: [],
+              action: "auto_schedule",
+              scheduledTime: parsedTime,
+              postToSchedule: postToSchedule,
+              confirmationMessage: parseResult.message,
+              wasRescheduled: parseResult.wasRescheduled,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         break;
       }
