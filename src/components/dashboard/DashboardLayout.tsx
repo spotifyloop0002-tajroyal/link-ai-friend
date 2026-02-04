@@ -35,7 +35,7 @@ interface DashboardLayoutProps {
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Calendar, label: "Calendar", path: "/dashboard/calendar" },
-  { icon: Bot, label: "Agents", path: "/dashboard/agents", badge: 2 },
+  { icon: Bot, label: "Agents", path: "/dashboard/agents" },
   { icon: BarChart3, label: "Analytics", path: "/dashboard/analytics" },
   { icon: Linkedin, label: "LinkedIn Connection", path: "/dashboard/linkedin" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
@@ -153,11 +153,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 >
                   <item.icon className="w-5 h-5" />
                   <span className="font-medium">{item.label}</span>
-                  {item.badge && (
-                    <span className="ml-auto px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground">
-                      {item.badge}
-                    </span>
-                  )}
                 </NavLink>
               );
             })}

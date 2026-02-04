@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { ExtensionStatus } from "@/components/ExtensionStatus";
+import { ExtensionTestPanel } from "@/components/extension/ExtensionTestPanel";
 import { MissingProfileBanner } from "@/components/linkedin/MissingProfileBanner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useLinkedInAnalytics } from "@/hooks/useLinkedInAnalytics";
@@ -27,6 +28,7 @@ import {
   MessageSquare,
   Share2,
   BarChart3,
+  FileText,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
@@ -258,20 +260,27 @@ const DashboardPage = () => {
   const queuedCount = scheduledPosts.filter(p => p.status === 'pending' || p.status === 'posting').length;
   const postedCount = scheduledPosts.filter(p => p.status === 'posted').length;
   const activeAgentsCount = agents.filter(a => a.is_active).length;
+  
+  // Calculate total posts generated from agents
+  const totalGeneratedFromAgents = agents.reduce((sum, a) => sum + (a.posts_created || 0), 0);
+  // Fallback to profile count if agent stats are 0
+  const totalGenerated = totalGeneratedFromAgents > 0 
+    ? totalGeneratedFromAgents 
+    : (profile?.posts_created_count || 0);
 
   const stats = [
     {
       label: "Active Agents",
       value: activeAgentsCount.toString(),
-      subtitle: "AI content creators",
+      subtitle: `${agents.length} total agents`,
       icon: Users,
       color: "from-primary to-primary/60",
     },
     {
       label: "Posts Created",
-      value: profile?.posts_created_count?.toString() || "0",
+      value: totalGenerated.toString(),
       subtitle: "Total generated",
-      icon: Bot,
+      icon: FileText,
       color: "from-secondary to-secondary/60",
     },
     {
@@ -596,7 +605,7 @@ const DashboardPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="grid sm:grid-cols-2 gap-4"
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           <button
             onClick={() => navigate("/dashboard/agents")}
@@ -623,6 +632,11 @@ const DashboardPage = () => {
               Manage your scheduled posts and content calendar
             </p>
           </button>
+          
+          {/* Extension Test Panel in grid */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <ExtensionTestPanel />
+          </div>
         </motion.div>
       </div>
     </DashboardLayout>
