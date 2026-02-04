@@ -179,6 +179,49 @@ export const useExtensionEvents = () => {
         });
       }
       
+      // Extension acknowledgment - posts received confirmation
+      if (message.type === 'EXTENSION_POSTS_RECEIVED') {
+        console.log('✅ Extension confirmed receipt of', message.count, 'posts');
+        toast.success(`Extension received ${message.count} post(s)`, {
+          description: 'Posts are queued for publishing',
+        });
+      }
+      
+      // LinkedIn UI change detection - CRITICAL ALERT
+      if (message.type === 'EXTENSION_EVENT' && message.event === 'linkedinUIChanged') {
+        console.error('🚨 CRITICAL: LinkedIn UI changed!', message.data);
+        
+        // Show user-friendly error immediately
+        toast.error(
+          'LinkedIn updated their interface. Posting may be affected. Our team has been notified.',
+          { duration: 10000 }
+        );
+        
+        // Log to database and send admin alert
+        (async () => {
+          try {
+            const { supabase } = await import('@/integrations/supabase/client');
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            // Send critical alert to admin via edge function
+            await supabase.functions.invoke('send-critical-alert', {
+              body: {
+                alertType: 'linkedin_ui_changed',
+                severity: 'critical',
+                title: 'LinkedIn UI Changed',
+                message: 'The LinkedIn interface has changed. Extension posting may fail.',
+                details: message.data,
+                userId: user?.id,
+              }
+            });
+            
+            console.log('✅ Critical alert sent to admin');
+          } catch (err) {
+            console.error('Failed to send critical alert:', err);
+          }
+        })();
+      }
+      
       // v5.0 - Handle POST_RESULT from extension (post success/failure with LinkedIn URL)
       if (message.type === 'POST_RESULT') {
         console.log('📨 POST_RESULT received:', message);
