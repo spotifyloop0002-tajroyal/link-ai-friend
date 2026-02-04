@@ -92,6 +92,53 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_attempt_at: string | null
+          post_id: string | null
+          post_url: string
+          scheduled_for: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          post_id?: string | null
+          post_url: string
+          scheduled_for: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          post_id?: string | null
+          post_url?: string
+          scheduled_for?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_queue_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           code: string
@@ -192,6 +239,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "extension_alerts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extension_posted_urls: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          post_id: string | null
+          post_url: string
+          status: string | null
+          tracking_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          post_id?: string | null
+          post_url: string
+          status?: string | null
+          tracking_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          post_id?: string | null
+          post_url?: string
+          status?: string | null
+          tracking_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extension_posted_urls_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
