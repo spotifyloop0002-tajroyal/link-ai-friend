@@ -69,6 +69,35 @@ export const useAgents = () => {
         return null;
       }
 
+      // Get user's subscription plan to check agent limits
+      const { data: profileData } = await supabase
+        .from("user_profiles")
+        .select("subscription_plan")
+        .eq("user_id", user.id)
+        .single();
+
+      const plan = profileData?.subscription_plan || "free";
+      
+      // Define agent limits per plan
+      const AGENT_LIMITS: Record<string, number> = {
+        free: 1,
+        pro: 3,
+        business: 7,
+      };
+
+      const maxAgents = AGENT_LIMITS[plan] || 1;
+      const currentAgentCount = agents.length;
+
+      // Check if user has reached their agent limit
+      if (currentAgentCount >= maxAgents) {
+        toast({
+          title: "Agent limit reached",
+          description: `You've reached the maximum of ${maxAgents} agent${maxAgents > 1 ? 's' : ''} for the ${plan} plan. Upgrade to create more agents.`,
+          variant: "destructive",
+        });
+        return null;
+      }
+
       const { data, error: createError } = await supabase
         .from("agents")
         .insert({

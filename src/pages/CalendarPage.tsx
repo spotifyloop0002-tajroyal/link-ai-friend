@@ -268,10 +268,20 @@ const CalendarPage = () => {
                           {post.agent_name || "Manual"}
                         </span>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7"
+                            onClick={() => navigate(`/dashboard/agents?view=${post.id}`)}
+                          >
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7"
+                            onClick={() => navigate(`/dashboard/agents?edit=${post.id}`)}
+                          >
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
                           <Button
@@ -342,10 +352,20 @@ const CalendarPage = () => {
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={() => navigate(`/dashboard/agents?view=${post.id}`)}
+                    >
                       <Eye className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={() => navigate(`/dashboard/agents?edit=${post.id}`)}
+                    >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button
