@@ -32,6 +32,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useAgents } from "@/hooks/useAgents";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { toast } from "sonner";
 
 const agentTypes = [
@@ -46,6 +47,7 @@ const agentTypes = [
 ];
 
 const AgentsPage = () => {
+  usePageTitle("AI Agents");
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createStep, setCreateStep] = useState(1);

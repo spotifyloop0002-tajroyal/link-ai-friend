@@ -24,6 +24,7 @@ import {
 import { format, addMonths, subMonths, isSameDay } from "date-fns";
 import { usePosts } from "@/hooks/usePosts";
 import { useAgents } from "@/hooks/useAgents";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { useNavigate } from "react-router-dom";
 
 // Color mapping for agent types
@@ -39,6 +40,7 @@ const agentColors: Record<string, string> = {
 };
 
 const CalendarPage = () => {
+  usePageTitle("Content Calendar");
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());

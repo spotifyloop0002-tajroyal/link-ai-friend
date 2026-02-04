@@ -9,6 +9,7 @@ import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useLinkedInAnalytics } from "@/hooks/useLinkedInAnalytics";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAgents } from "@/hooks/useAgents";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Bot,
@@ -95,6 +96,7 @@ function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pendin
 }
 
 const DashboardPage = () => {
+  usePageTitle("Dashboard");
   const navigate = useNavigate();
   const { isConnected, sendPendingPosts } = useLinkedBotExtension();
   const { profile, isLoading: profileLoading } = useUserProfile();

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useSubscription, PLAN_LIMITS } from "@/hooks/useSubscription";
 import { usePayment, PLAN_PRICING } from "@/hooks/usePayment";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { 
   CreditCard, 
   Check, 
@@ -38,6 +39,7 @@ const planColors = {
 };
 
 const BillingPage = () => {
+  usePageTitle("Billing");
   const { status, isLoading: subscriptionLoading, fetchSubscriptionStatus } = useSubscription();
   const { 
     isLoading: paymentLoading, 

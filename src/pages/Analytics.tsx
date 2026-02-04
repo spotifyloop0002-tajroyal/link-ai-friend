@@ -5,6 +5,7 @@ import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
 import { useLinkedInAnalytics } from "@/hooks/useLinkedInAnalytics";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useToast } from "@/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { MissingProfileBanner } from "@/components/linkedin/MissingProfileBanner";
 import {
   Select,
@@ -43,6 +44,7 @@ const calculateEngagementRate = (views: number, likes: number, comments: number,
 };
 
 const AnalyticsPage = () => {
+  usePageTitle("Analytics");
   const { toast } = useToast();
   const { isConnected, isInstalled } = useLinkedBotExtension();
   const { profile: userProfile, isLoading: profileLoading } = useUserProfile();

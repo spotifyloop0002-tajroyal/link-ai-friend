@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useUserProfile, ProfileData } from "@/hooks/useUserProfile";
 import { useToast } from "@/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,7 @@ import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const SettingsPage = () => {
+  usePageTitle("Settings");
   const { profile, isLoading, saveProfile } = useUserProfile();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
