@@ -29,7 +29,16 @@ import {
   Share2,
   BarChart3,
   FileText,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +103,28 @@ const DashboardPage = () => {
   
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
+  const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
+  const [showPostModal, setShowPostModal] = useState(false);
+
+  // Delete post handler
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm('Are you sure you want to delete this post?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+      
+      if (error) throw error;
+      
+      toast.success('Post deleted');
+      fetchPosts();
+    } catch (err) {
+      console.error('Failed to delete post:', err);
+      toast.error('Failed to delete post');
+    }
+  };
 
   // Fetch posts from database (scheduled + recently posted)
   const fetchPosts = useCallback(async () => {
@@ -581,13 +612,34 @@ const DashboardPage = () => {
                               <ExternalLink className="w-4 h-4 text-primary" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setSelectedPost(post);
+                              setShowPostModal(true);
+                            }}
+                            title="View post preview"
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => navigate(`/dashboard/agents?editPost=${post.id}`)}
+                            title="Edit post"
+                          >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDeletePost(post.id)}
+                            title="Delete post"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -639,6 +691,98 @@ const DashboardPage = () => {
           </div>
         </motion.div>
       </div>
+
+      {/* Post Preview Modal */}
+      <Dialog open={showPostModal} onOpenChange={setShowPostModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Post Preview</DialogTitle>
+          </DialogHeader>
+          {selectedPost && (
+            <div className="space-y-4">
+              {/* LinkedIn-style header */}
+              <div className="flex items-start gap-3">
+                <Avatar className="w-12 h-12">
+                  <AvatarImage src={profile?.linkedin_profile_data?.profilePhoto as string || undefined} />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {profile?.name?.charAt(0) || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <p className="font-semibold">{profile?.name || 'User'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {profile?.role || profile?.industry || 'LinkedIn User'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedPost.posted_at 
+                      ? format(new Date(selectedPost.posted_at), "MMM d, yyyy 'at' h:mm a")
+                      : selectedPost.scheduled_time 
+                        ? format(new Date(selectedPost.scheduled_time), "MMM d, yyyy 'at' h:mm a")
+                        : 'Not scheduled'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Post content */}
+              <div className="text-sm whitespace-pre-wrap leading-relaxed border-l-2 border-primary/20 pl-4">
+                {selectedPost.content}
+              </div>
+
+              {/* Analytics if posted */}
+              {selectedPost.status === 'posted' && (
+                <div className="flex items-center gap-6 pt-4 border-t text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-4 h-4" />
+                    {selectedPost.views_count || 0} views
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <ThumbsUp className="w-4 h-4" />
+                    {selectedPost.likes_count || 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MessageSquare className="w-4 h-4" />
+                    {selectedPost.comments_count || 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Share2 className="w-4 h-4" />
+                    {selectedPost.shares_count || 0}
+                  </span>
+                </div>
+              )}
+
+              {/* LinkedIn-style action buttons (non-functional, just for preview) */}
+              <div className="flex items-center gap-2 pt-4 border-t">
+                <Button variant="ghost" size="sm" className="flex-1 gap-2" disabled>
+                  <ThumbsUp className="w-4 h-4" /> Like
+                </Button>
+                <Button variant="ghost" size="sm" className="flex-1 gap-2" disabled>
+                  <MessageSquare className="w-4 h-4" /> Comment
+                </Button>
+                <Button variant="ghost" size="sm" className="flex-1 gap-2" disabled>
+                  <Share2 className="w-4 h-4" /> Share
+                </Button>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t">
+                {selectedPost.linkedin_post_url && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.open(selectedPost.linkedin_post_url, '_blank')}
+                    className="gap-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View on LinkedIn
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setShowPostModal(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
