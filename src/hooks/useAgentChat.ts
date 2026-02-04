@@ -314,12 +314,21 @@ export function useAgentChat(
 
     } catch (error: any) {
       console.error("Chat error:", error);
+      
+      // Provide user-friendly error message
+      let userMessage = "Please try again.";
+      if (error.message?.includes("Failed to send a request") || error.message?.includes("FunctionsHttpError")) {
+        userMessage = "Server is temporarily unavailable. Please try again in a moment.";
+      } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
+        userMessage = "Network error. Please check your connection and try again.";
+      }
+      
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: `Sorry, I encountered an error: ${error.message || "Unknown error"}. Please try again.`,
+        content: `Sorry, I encountered an error. ${userMessage}`,
         timestamp: new Date(),
       }]);
-      toast.error(error.message || "Failed to send message");
+      toast.error("Failed to send message", { description: userMessage });
       return null;
     } finally {
       setIsLoading(false);

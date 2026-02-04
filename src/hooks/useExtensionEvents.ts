@@ -322,6 +322,7 @@ export const useExtensionEvents = () => {
       }
       
       // v5.0 - Bulk analytics result
+      // NOTE: Toast is handled by RefreshAnalyticsButton.tsx to avoid duplicates
       if (message.type === 'BULK_ANALYTICS_RESULT') {
         const { success, successful, total } = message;
         
@@ -333,11 +334,7 @@ export const useExtensionEvents = () => {
           queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
           queryClient.invalidateQueries({ queryKey: ['linkedin-analytics'], refetchType: 'all' });
           
-          if (successful > 0) {
-            toast.success('Analytics Updated', {
-              description: `Updated ${successful} of ${total} posts`,
-            });
-          }
+          // Don't show toast here - RefreshAnalyticsButton handles its own toast
         } else {
           console.error('Bulk analytics scraping failed:', message.error);
         }
