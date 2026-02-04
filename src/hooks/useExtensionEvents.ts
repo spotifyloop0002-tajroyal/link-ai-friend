@@ -324,10 +324,57 @@ export const useExtensionEvents = () => {
       // v5.0 - Bulk analytics result
       // NOTE: Toast is handled by RefreshAnalyticsButton.tsx to avoid duplicates
       if (message.type === 'BULK_ANALYTICS_RESULT') {
-        const { success, successful, total } = message;
+        const { success, successful, total, results } = message;
         
         if (success) {
           console.log(`📊 Bulk analytics scraped: ${successful}/${total}`);
+          
+          // Save analytics data to database
+          if (results && Array.isArray(results)) {
+            (async () => {
+              try {
+                const { supabase } = await import('@/integrations/supabase/client');
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                  console.error('No user found for analytics update');
+                  return;
+                }
+                
+                for (const result of results) {
+                  if (!result.url) continue;
+                  
+                  const views = result.views || 0;
+                  const likes = result.likes || 0;
+                  const comments = result.comments || 0;
+                  const shares = result.reposts || result.shares || 0;
+                  
+                  console.log(`💾 Saving analytics for ${result.url}:`, { views, likes, comments, shares });
+                  
+                  // Update the post directly by LinkedIn URL
+                  const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({
+                      views_count: views,
+                      likes_count: likes,
+                      comments_count: comments,
+                      shares_count: shares,
+                      last_synced_at: new Date().toISOString(),
+                    })
+                    .eq('user_id', user.id)
+                    .eq('linkedin_post_url', result.url);
+                  
+                  if (updateError) {
+                    console.error('Failed to update analytics for', result.url, updateError);
+                  } else {
+                    console.log('✅ Analytics saved for', result.url);
+                  }
+                }
+              } catch (err) {
+                console.error('Error saving bulk analytics:', err);
+              }
+            })();
+          }
           
           // Invalidate all analytics queries to refresh UI
           queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
