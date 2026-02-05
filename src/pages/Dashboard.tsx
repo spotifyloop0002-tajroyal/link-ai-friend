@@ -44,6 +44,7 @@ import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { validateLinkedInPostUrl } from "@/lib/linkedinUrlUtils";
 
 interface PostAnalytics {
   views?: number;
@@ -69,16 +70,21 @@ interface ScheduledPost {
   last_synced_at?: string;
 }
 
-// LinkedIn URL validation pattern
-const LINKEDIN_URL_PATTERN = /linkedin\.com\/(posts|feed).*activity[-:][0-9]{19}/;
-
 // Helper to determine display status
 // Maps database status to display status
 function getPostDisplayStatus(post: ScheduledPost): 'published' | 'posted_pending' | 'posting' | 'queued' | 'failed' {
   // If status is posted
   if (post.status === 'posted') {
-    const hasValidUrl = post.linkedin_post_url && LINKEDIN_URL_PATTERN.test(post.linkedin_post_url);
-    return hasValidUrl ? 'published' : 'posted_pending';
+    // Use proper URL validation - if we have any URL, consider it published
+    // The URL validation utility handles all formats including /feed/update/urn:li:share:XXX
+    if (post.linkedin_post_url) {
+      const validation = validateLinkedInPostUrl(post.linkedin_post_url);
+      // If valid OR if it at least contains linkedin.com, show as published
+      if (validation.isValid || post.linkedin_post_url.includes('linkedin.com')) {
+        return 'published';
+      }
+    }
+    return 'posted_pending';
   }
   
   // If status is failed
