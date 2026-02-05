@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { ExtensionEventType } from '@/types/extension';
+import { validateLinkedInPostUrl } from '@/lib/linkedinUrlUtils';
 
 // Re-export for backward compatibility
 export type { ExtensionEventType } from '@/types/extension';
@@ -225,7 +226,15 @@ export const useExtensionEvents = () => {
         const actualPostId = postId || trackingId;
         
         if (success && actualPostId) {
-          console.log('✅ Post successful, saving LinkedIn URL:', actualUrl);
+          // Validate the LinkedIn URL before saving
+          const urlValidation = validateLinkedInPostUrl(actualUrl);
+          console.log('🔍 URL validation result:', urlValidation);
+          
+          // Determine what status to set based on URL validity
+          const postStatus = urlValidation.isValid ? 'posted' : 'posted';
+          const validUrl = urlValidation.isValid ? urlValidation.url : actualUrl;
+          
+          console.log('✅ Post successful, saving LinkedIn URL:', validUrl);
           
           try {
             // Import supabase dynamically to avoid circular deps
@@ -233,18 +242,22 @@ export const useExtensionEvents = () => {
             
             // Update post with LinkedIn URL and status
             const updateData: Record<string, unknown> = {
-              status: 'posted',
+              status: postStatus,
               posted_at: new Date().toISOString(),
             };
             
-            if (actualUrl) {
-              updateData.linkedin_post_url = actualUrl;
+            // Always save the URL even if validation failed - user might want to check manually
+            if (validUrl) {
+              updateData.linkedin_post_url = validUrl;
               // Initialize analytics to 0 when URL is captured
               updateData.views_count = 0;
               updateData.likes_count = 0;
               updateData.comments_count = 0;
               updateData.shares_count = 0;
             }
+            
+            // Clear any error state
+            updateData.last_error = null;
             
             const { error: updateError } = await supabase
               .from('posts')
@@ -254,15 +267,15 @@ export const useExtensionEvents = () => {
             if (updateError) {
               console.error('Failed to save LinkedIn URL:', updateError);
             } else {
-              console.log('✅ LinkedIn URL saved to database:', actualUrl);
+              console.log('✅ LinkedIn URL saved to database:', validUrl);
             }
             
             // Update local status
             if (actualPostId) {
               updatePostStatus(actualPostId, {
                 status: 'posted',
-                message: 'Posted successfully!',
-                linkedinUrl: actualUrl,
+                message: urlValidation.isValid ? 'Posted successfully!' : 'Posted (URL may need verification)',
+                linkedinUrl: validUrl || undefined,
               });
             }
             
@@ -272,18 +285,38 @@ export const useExtensionEvents = () => {
             queryClient.invalidateQueries({ queryKey: ['analytics'], refetchType: 'all' });
             
             // Show success toast with link to post
-            if (actualUrl) {
+            if (validUrl && urlValidation.isValid) {
               toast.success('Posted to LinkedIn! 🎉', {
                 description: 'Your post is live',
                 action: {
                   label: 'View Post',
-                  onClick: () => window.open(actualUrl, '_blank'),
+                  onClick: () => window.open(validUrl, '_blank'),
+                },
+              });
+            } else if (validUrl) {
+              toast.success('Posted to LinkedIn!', {
+                description: 'Post created, URL may need manual verification',
+                action: {
+                  label: 'Check LinkedIn',
+                  onClick: () => window.open('https://www.linkedin.com/feed/', '_blank'),
                 },
               });
             } else {
               toast.success('Posted to LinkedIn!', {
                 description: 'Post created but URL not captured',
               });
+            }
+            
+            // Schedule analytics scraping after successful post (non-blocking)
+            if (validUrl && urlValidation.isValid) {
+              console.log('📊 Scheduling analytics scraping in 10 seconds...');
+              setTimeout(() => {
+                console.log('📊 Triggering analytics scrape for:', validUrl);
+                window.postMessage({
+                  type: 'SCRAPE_ANALYTICS',
+                  postUrl: validUrl,
+                }, '*');
+              }, 10000);
             }
           } catch (err) {
             console.error('Error saving LinkedIn URL:', err);
@@ -341,8 +374,22 @@ export const useExtensionEvents = () => {
                   return;
                 }
                 
+                // Get all user's posts to match by activity ID
+                const { data: userPosts } = await supabase
+                  .from('posts')
+                  .select('id, linkedin_post_url')
+                  .eq('user_id', user.id)
+                  .not('linkedin_post_url', 'is', null);
+                
                 for (const result of results) {
                   if (!result.url) continue;
+                  
+                  // Validate URL before processing
+                  const urlValidation = validateLinkedInPostUrl(result.url);
+                  if (!urlValidation.isValid) {
+                    console.warn('⚠️ Skipping invalid analytics URL:', result.url);
+                    continue;
+                  }
                   
                   const views = result.views || 0;
                   const likes = result.likes || 0;
@@ -351,8 +398,39 @@ export const useExtensionEvents = () => {
                   
                   console.log(`💾 Saving analytics for ${result.url}:`, { views, likes, comments, shares });
                   
-                  // Update the post directly by LinkedIn URL
-                  const { error: updateError } = await supabase
+                  // Try to find matching post by activity ID first
+                  let matchedPostId: string | null = null;
+                  
+                  if (urlValidation.activityId && userPosts) {
+                    const matchingPost = userPosts.find(post => {
+                      if (!post.linkedin_post_url) return false;
+                      const postValidation = validateLinkedInPostUrl(post.linkedin_post_url);
+                      return postValidation.activityId === urlValidation.activityId;
+                    });
+                    if (matchingPost) {
+                      matchedPostId = matchingPost.id;
+                      console.log('✅ Matched post by activity ID:', matchedPostId);
+                    }
+                  }
+                  
+                  // Update the post by ID if matched, otherwise try by URL
+                  let updateError;
+                  
+                  if (matchedPostId) {
+                    const { error } = await supabase
+                      .from('posts')
+                      .update({
+                        views_count: views,
+                        likes_count: likes,
+                        comments_count: comments,
+                        shares_count: shares,
+                        last_synced_at: new Date().toISOString(),
+                      })
+                      .eq('id', matchedPostId);
+                    updateError = error;
+                  } else {
+                    // Fallback to URL matching
+                    const { error } = await supabase
                     .from('posts')
                     .update({
                       views_count: views,
@@ -363,6 +441,8 @@ export const useExtensionEvents = () => {
                     })
                     .eq('user_id', user.id)
                     .eq('linkedin_post_url', result.url);
+                    updateError = error;
+                  }
                   
                   if (updateError) {
                     console.error('Failed to update analytics for', result.url, updateError);
@@ -517,13 +597,41 @@ export const useExtensionEvents = () => {
               break;
               
             case 'postUrlFailed':
+              // Don't get stuck on "verifying" - mark as posted anyway
+              (async () => {
+                try {
+                  const { supabase } = await import('@/integrations/supabase/client');
+                  
+                  // Mark as posted even without URL - don't leave in verifying state
+                  await supabase
+                    .from('posts')
+                    .update({
+                      status: 'posted',
+                      posted_at: new Date().toISOString(),
+                      last_error: 'URL extraction failed - check LinkedIn manually',
+                    })
+                    .eq('id', postId);
+                  
+                  console.log('✅ Post marked as posted (URL extraction failed)');
+                } catch (err) {
+                  console.error('Error updating post status:', err);
+                }
+              })();
+              
               updatePostStatus(postId, {
-                status: 'verifying',
-                message: data.message || 'Posted but URL extraction failed',
+                status: 'posted',
+                message: data.message || 'Posted but URL extraction failed - check LinkedIn',
               });
               
-              toast.warning('Posted (No URL)', {
+              // Invalidate queries
+              queryClient.invalidateQueries({ queryKey: ['posts'], refetchType: 'all' });
+              
+              toast.warning('Posted to LinkedIn', {
                 description: 'Post created but couldn\'t get URL. Check LinkedIn manually.',
+                action: {
+                  label: 'Open LinkedIn',
+                  onClick: () => window.open('https://www.linkedin.com/feed/', '_blank'),
+                },
               });
               break;
               
