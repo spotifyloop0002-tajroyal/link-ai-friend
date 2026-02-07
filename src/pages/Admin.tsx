@@ -46,6 +46,7 @@ import {
   Eye,
   Crown,
   AlertCircle,
+  Bot,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
@@ -87,6 +88,7 @@ const AdminPage = () => {
   const [planFilter, setPlanFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [totalAgents, setTotalAgents] = useState(0);
 
   // Check if current user is admin
   useEffect(() => {
@@ -112,8 +114,8 @@ const AdminPage = () => {
         setIsAdmin(data === true);
 
         if (data === true) {
-          // Fetch all users data
-          await fetchUsers();
+          // Fetch all users data and agents count in parallel
+          await fetchAdminData();
         }
       } catch (err) {
         console.error("Admin check error:", err);
@@ -126,22 +128,27 @@ const AdminPage = () => {
     checkAdminAccess();
   }, [navigate]);
 
-  const fetchUsers = async () => {
+  const fetchAdminData = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_admin_users_data');
-      
-      if (error) {
-        console.error("Fetch users error:", error);
+      // Fetch users and agents count in parallel
+      const [usersRes, agentsRes] = await Promise.all([
+        supabase.rpc('get_admin_users_data'),
+        supabase.from('agents').select('*', { count: 'exact', head: true }),
+      ]);
+
+      if (usersRes.error) {
+        console.error("Fetch users error:", usersRes.error);
         toast({
           title: "Failed to load users",
-          description: error.message,
+          description: usersRes.error.message,
           variant: "destructive",
         });
         return;
       }
 
-      setUsers(data || []);
-      setFilteredUsers(data || []);
+      setUsers(usersRes.data || []);
+      setFilteredUsers(usersRes.data || []);
+      setTotalAgents(agentsRes.count || 0);
     } catch (err) {
       console.error("Fetch error:", err);
     }
@@ -236,7 +243,7 @@ const AdminPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 lg:grid-cols-5 gap-4"
+          className="grid grid-cols-2 lg:grid-cols-6 gap-4"
         >
           <Card>
             <CardHeader className="pb-2">
@@ -273,11 +280,22 @@ const AdminPage = () => {
           </Card>
           <Card>
             <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Agents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Bot className="w-5 h-5 text-secondary" />
+                <span className="text-2xl font-bold">{totalAgents}</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Posts Published</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-secondary" />
+                <Calendar className="w-5 h-5 text-green-500" />
                 <span className="text-2xl font-bold">{totalPosts}</span>
               </div>
             </CardContent>
