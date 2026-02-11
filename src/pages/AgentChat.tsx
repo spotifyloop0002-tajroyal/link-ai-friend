@@ -32,6 +32,7 @@ import { useImageUpload } from "@/hooks/useImageUpload";
 import { useExtensionEvents } from "@/hooks/useExtensionEvents";
 import { supabase } from "@/integrations/supabase/client";
 import { PostStatus } from "@/lib/postLifecycle";
+import { extractLinkedInId } from "@/utils/linkedinVerification";
 
 const agentTypes = [
   { id: "comedy", label: "Comedy/Humorous" },
@@ -234,6 +235,35 @@ const AgentChatPage = () => {
       if (!isExtensionConnected) {
         toast.error("❌ Extension not connected. Please install and connect the Chrome extension first.");
         addActivityEntry("failed", "Extension not connected", postToSchedule.id);
+        return;
+      }
+
+      // 🔐 Verify LinkedIn account before posting
+      const linkedinVerified = (profile as any)?.linkedin_verified;
+      const linkedinPublicId = (profile as any)?.linkedin_public_id || extractLinkedInId(profile?.linkedin_profile_url || '');
+      
+      if (!linkedinVerified) {
+        toast.error("🔐 LinkedIn Verification Required", {
+          description: "Please verify your LinkedIn account in Settings before posting.",
+          action: {
+            label: "Go to Settings",
+            onClick: () => navigate("/dashboard/settings"),
+          },
+          duration: 8000,
+        });
+        addActivityEntry("failed", "LinkedIn not verified", postToSchedule.id);
+        return;
+      }
+
+      if (!linkedinPublicId) {
+        toast.error("LinkedIn Profile Missing", {
+          description: "Please add your LinkedIn profile URL in Settings.",
+          action: {
+            label: "Go to Settings",
+            onClick: () => navigate("/dashboard/settings"),
+          },
+        });
+        addActivityEntry("failed", "No LinkedIn profile", postToSchedule.id);
         return;
       }
       

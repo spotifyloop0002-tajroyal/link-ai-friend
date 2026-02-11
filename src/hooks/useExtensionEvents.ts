@@ -327,6 +327,34 @@ export const useExtensionEvents = () => {
           try {
             const { supabase } = await import('@/integrations/supabase/client');
             
+            // 🔐 Handle account mismatch - mark user as unverified
+            if (error && (error.includes('Account mismatch') || error.includes('account mismatch'))) {
+              console.warn('🔐 Account mismatch detected! Marking user as unverified.');
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await supabase
+                  .from('user_profiles')
+                  .update({
+                    linkedin_verified: false,
+                    linkedin_verified_at: null,
+                  })
+                  .eq('user_id', user.id);
+              }
+              
+              toast.error('⚠️ Wrong LinkedIn Account', {
+                description: 'You switched LinkedIn accounts. Please re-verify in Settings.',
+                duration: 10000,
+                action: {
+                  label: 'Re-verify',
+                  onClick: () => window.location.href = '/dashboard/settings',
+                },
+              });
+            } else {
+              toast.error('Failed to post to LinkedIn', {
+                description: error || 'Please try again',
+              });
+            }
+            
             // Update post status to failed
             if (actualPostId) {
               await supabase
@@ -347,10 +375,6 @@ export const useExtensionEvents = () => {
           } catch (err) {
             console.error('Error updating failed status:', err);
           }
-          
-          toast.error('Failed to post to LinkedIn', {
-            description: error || 'Please try again',
-          });
         }
       }
       
