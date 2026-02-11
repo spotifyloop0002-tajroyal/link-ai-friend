@@ -306,6 +306,17 @@ export function useAgentChat(
         });
         
         toast.success(`📝 Post created! Say "post now" or give a time to schedule.`);
+        
+        // Auto-generate images for posts that have generateImage flag
+        for (const post of newPosts) {
+          if (post.generateImage && post.imagePrompt) {
+            console.log("🎨 Auto-generating image for post:", post.id);
+            // Delay slightly to ensure state is updated
+            setTimeout(() => {
+              generateImageForPostDirect(post.id, post.content, post.imagePrompt);
+            }, 500);
+          }
+        }
       } else {
         console.log("⚠️ No posts in response to add");
       }
@@ -403,7 +414,11 @@ export function useAgentChat(
   const generateImageForPost = useCallback(async (postId: string) => {
     const post = generatedPosts.find(p => p.id === postId);
     if (!post) return;
+    await generateImageForPostDirect(postId, post.content, post.imagePrompt);
+  }, [generatedPosts]);
 
+  // Direct image generation that doesn't depend on generatedPosts state
+  const generateImageForPostDirect = useCallback(async (postId: string, content: string, imagePrompt?: string) => {
     setGeneratedPosts(prev =>
       prev.map(p => p.id === postId ? { ...p, isGeneratingImage: true } : p)
     );
@@ -411,8 +426,8 @@ export function useAgentChat(
     try {
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
-          prompt: post.imagePrompt,
-          postContent: post.content,
+          prompt: imagePrompt,
+          postContent: content,
         },
       });
 
@@ -434,7 +449,7 @@ export function useAgentChat(
         prev.map(p => p.id === postId ? { ...p, isGeneratingImage: false } : p)
       );
     }
-  }, [generatedPosts]);
+  }, []);
 
   // Validate post content before saving
   const isValidPostContent = (content: string): boolean => {

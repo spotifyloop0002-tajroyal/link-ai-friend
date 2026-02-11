@@ -682,7 +682,10 @@ export type Database = {
           linkedin_profile_edit_count: number | null
           linkedin_profile_url: string | null
           linkedin_profile_url_locked: boolean | null
+          linkedin_public_id: string | null
           linkedin_username: string | null
+          linkedin_verified: boolean | null
+          linkedin_verified_at: string | null
           location: string | null
           name: string | null
           onboarding_completed: boolean | null
@@ -721,7 +724,10 @@ export type Database = {
           linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
+          linkedin_public_id?: string | null
           linkedin_username?: string | null
+          linkedin_verified?: boolean | null
+          linkedin_verified_at?: string | null
           location?: string | null
           name?: string | null
           onboarding_completed?: boolean | null
@@ -760,7 +766,10 @@ export type Database = {
           linkedin_profile_edit_count?: number | null
           linkedin_profile_url?: string | null
           linkedin_profile_url_locked?: boolean | null
+          linkedin_public_id?: string | null
           linkedin_username?: string | null
+          linkedin_verified?: boolean | null
+          linkedin_verified_at?: string | null
           location?: string | null
           name?: string | null
           onboarding_completed?: boolean | null

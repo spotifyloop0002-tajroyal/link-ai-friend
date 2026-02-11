@@ -12,6 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { LinkedInProfileInput, validateLinkedInUrl } from "@/components/linkedin/LinkedInProfileInput";
+import LinkedInVerification from "@/components/linkedin/LinkedInVerification";
+import { extractLinkedInId } from "@/utils/linkedinVerification";
 import {
   Select,
   SelectContent,
@@ -35,7 +37,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
 const SettingsPage = () => {
   usePageTitle("Settings");
   const { profile, isLoading, saveProfile } = useUserProfile();
@@ -110,6 +111,12 @@ const SettingsPage = () => {
       if (canEdit && linkedinUrl && linkedinUrl !== profile?.linkedin_profile_url) {
         profileData.linkedin_profile_url = linkedinUrl;
         profileData.linkedin_profile_url_locked = true;
+        
+        // Extract and save LinkedIn public ID for verification
+        const publicId = extractLinkedInId(linkedinUrl);
+        if (publicId) {
+          (profileData as any).linkedin_public_id = publicId;
+        }
         
         // If this is an edit (not initial), increment count and confirm
         if (hasExistingUrl) {
@@ -367,6 +374,23 @@ const SettingsPage = () => {
               </div>
             </CardContent>
           </Card>
+        </motion.div>
+
+        {/* LinkedIn Verification Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <LinkedInVerification
+            linkedinPublicId={(profile as any)?.linkedin_public_id || extractLinkedInId(profile?.linkedin_profile_url || '')}
+            linkedinVerified={(profile as any)?.linkedin_verified || false}
+            linkedinProfileUrl={profile?.linkedin_profile_url || null}
+            onVerificationComplete={() => {
+              // Refresh profile data
+              window.location.reload();
+            }}
+          />
         </motion.div>
 
         {/* Subscription Card */}

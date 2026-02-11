@@ -35,6 +35,9 @@ export interface UserProfile {
   linkedin_profile_edit_count: number;
   linkedin_profile_confirmed: boolean;
   linkedin_username: string | null;
+  linkedin_public_id: string | null;
+  linkedin_verified: boolean;
+  linkedin_verified_at: string | null;
   preferred_tone: string | null;
   post_frequency: string | null;
   onboarding_completed: boolean;
