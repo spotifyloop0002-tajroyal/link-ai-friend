@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Bot, ArrowLeft, Loader2, Mail, Lock, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { useToast } from "@/hooks/use-toast";
 
 const Signup = () => {
@@ -118,11 +119,8 @@ const Signup = () => {
   const handleGoogleSignUp = async () => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/onboarding`,
-        },
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
 
       if (error) throw error;
