@@ -13,7 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { LinkedInProfileInput, validateLinkedInUrl } from "@/components/linkedin/LinkedInProfileInput";
 import LinkedInVerification from "@/components/linkedin/LinkedInVerification";
-import { extractLinkedInId } from "@/utils/linkedinVerification";
+import { extractLinkedInId, verifyLinkedInAccount, getVerificationErrorMessage } from "@/utils/linkedinVerification";
+import { toast as sonnerToast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -42,6 +44,12 @@ const SettingsPage = () => {
   const { profile, isLoading, saveProfile } = useUserProfile();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutoVerifying, setIsAutoVerifying] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<{
+    status: 'idle' | 'verifying' | 'success' | 'error';
+    message: string;
+    error?: string;
+  } | null>(null);
 
   // Editable fields
   const [name, setName] = useState(profile?.name || "");
@@ -80,6 +88,51 @@ const SettingsPage = () => {
     }
   }, [profile]);
 
+  const autoVerifyLinkedIn = async (publicId: string) => {
+    setIsAutoVerifying(true);
+    setVerificationStatus({ status: 'verifying', message: 'Verifying LinkedIn account...' });
+    
+    try {
+      const result = await verifyLinkedInAccount(publicId);
+      
+      if (result.success) {
+        // Update verification in DB
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('user_profiles').update({
+            linkedin_verified: true,
+            linkedin_verified_at: new Date().toISOString(),
+          }).eq('user_id', user.id);
+        }
+        
+        setVerificationStatus({
+          status: 'success',
+          message: `✅ Verified! Logged in as: ${result.linkedinId}`,
+        });
+        sonnerToast.success('LinkedIn account verified!');
+      } else {
+        const errorInfo = getVerificationErrorMessage(result.error!, {
+          expectedLinkedInId: result.expectedLinkedInId,
+          currentLinkedInId: result.currentLinkedInId,
+        });
+        setVerificationStatus({
+          status: 'error',
+          message: errorInfo.title,
+          error: `${errorInfo.message} ${errorInfo.action}`,
+        });
+        sonnerToast.error(errorInfo.title, { description: errorInfo.message, duration: 10000 });
+      }
+    } catch {
+      setVerificationStatus({
+        status: 'error',
+        message: '❌ Extension not responding',
+        error: 'Make sure the LinkedBot extension is installed and LinkedIn is open in this browser.',
+      });
+    } finally {
+      setIsAutoVerifying(false);
+    }
+  };
+
   const handleSave = async () => {
     // Validate LinkedIn URL if it's being set
     if (linkedinUrl && !isLinkedInLocked) {
@@ -95,6 +148,8 @@ const SettingsPage = () => {
     }
 
     setIsSaving(true);
+    const isNewLinkedinUrl = canEdit && linkedinUrl && linkedinUrl !== profile?.linkedin_profile_url;
+    
     try {
       const profileData: ProfileData = {
         name,
@@ -108,22 +163,20 @@ const SettingsPage = () => {
       };
 
       // Handle LinkedIn URL save with one-time edit logic
-      if (canEdit && linkedinUrl && linkedinUrl !== profile?.linkedin_profile_url) {
+      if (isNewLinkedinUrl) {
         profileData.linkedin_profile_url = linkedinUrl;
         profileData.linkedin_profile_url_locked = true;
         
-        // Extract and save LinkedIn public ID for verification
         const publicId = extractLinkedInId(linkedinUrl);
         if (publicId) {
           (profileData as any).linkedin_public_id = publicId;
+          // Reset verification for new URL
+          (profileData as any).linkedin_verified = false;
         }
         
-        // If this is an edit (not initial), increment count and confirm
         if (hasExistingUrl) {
-          // This is an edit - lock permanently
           profileData.linkedin_profile_confirmed = true;
         }
-        // Increment edit count (will be 1 after first save)
         profileData.linkedin_profile_edit_count = editCount + 1;
       }
 
@@ -134,6 +187,15 @@ const SettingsPage = () => {
           title: "Settings saved",
           description: "Your profile has been updated successfully.",
         });
+        
+        // Auto-verify if LinkedIn URL was just saved
+        if (isNewLinkedinUrl) {
+          const publicId = extractLinkedInId(linkedinUrl);
+          if (publicId) {
+            // Small delay to let DB update propagate
+            setTimeout(() => autoVerifyLinkedIn(publicId), 500);
+          }
+        }
       }
     } finally {
       setIsSaving(false);
@@ -376,6 +438,49 @@ const SettingsPage = () => {
           </Card>
         </motion.div>
 
+        {/* Auto-Verification Status */}
+        {verificationStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Alert 
+              variant={verificationStatus.status === 'error' ? 'destructive' : 'default'}
+              className={
+                verificationStatus.status === 'success' ? 'border-green-500 bg-green-50 dark:bg-green-950/30' :
+                verificationStatus.status === 'verifying' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' :
+                ''
+              }
+            >
+              <AlertDescription className="space-y-2">
+                <p className="font-medium">{verificationStatus.message}</p>
+                {verificationStatus.error && (
+                  <p className="text-sm">{verificationStatus.error}</p>
+                )}
+                {verificationStatus.status === 'error' && (
+                  <div className="flex gap-2 mt-2">
+                    <Button size="sm" variant="outline" onClick={() => window.open('https://linkedin.com', '_blank')}>
+                      Open LinkedIn
+                    </Button>
+                    <Button size="sm" onClick={() => {
+                      const id = extractLinkedInId(linkedinUrl || profile?.linkedin_profile_url || '');
+                      if (id) autoVerifyLinkedIn(id);
+                    }}>
+                      Retry Verification
+                    </Button>
+                  </div>
+                )}
+                {verificationStatus.status === 'verifying' && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Checking your LinkedIn account...
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
         {/* LinkedIn Verification Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -387,7 +492,7 @@ const SettingsPage = () => {
             linkedinVerified={(profile as any)?.linkedin_verified || false}
             linkedinProfileUrl={profile?.linkedin_profile_url || null}
             onVerificationComplete={() => {
-              // Refresh profile data
+              setVerificationStatus({ status: 'success', message: '✅ LinkedIn account verified!' });
               window.location.reload();
             }}
           />

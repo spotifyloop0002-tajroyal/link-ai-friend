@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefreshAnalyticsButton } from "@/components/analytics/RefreshAnalyticsButton";
+import { Progress } from "@/components/ui/progress";
 
 const formatNumber = (num: number): string => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -62,6 +63,38 @@ const AnalyticsPage = () => {
   const hasProfileUrl = Boolean(userProfile?.linkedin_profile_url);
 
   const [period, setPeriod] = useState("30");
+  const [scrapingProgress, setScrapingProgress] = useState<{
+    current: number;
+    total: number;
+    status: 'scraping' | 'completed';
+  } | null>(null);
+
+  // Listen for sequential scraping progress from extension
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      
+      if (event.data.type === 'EXTENSION_EVENT' && event.data.event === 'scrapingProgress') {
+        const { current, total, status } = event.data.data;
+        setScrapingProgress({ current, total, status: status === 'completed' ? 'completed' : 'scraping' });
+      }
+      
+      if (event.data.type === 'EXTENSION_EVENT' && event.data.event === 'scrapingComplete') {
+        setScrapingProgress(null);
+        // Refresh analytics data
+        fetchAnalytics();
+      }
+      
+      // Also handle BULK_ANALYTICS_RESULT completion
+      if (event.data.type === 'BULK_ANALYTICS_RESULT') {
+        setScrapingProgress(null);
+        fetchAnalytics();
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [fetchAnalytics]);
 
   const handleSyncAnalytics = async () => {
     if (!isConnected) {
@@ -507,6 +540,26 @@ const AnalyticsPage = () => {
           </>
         )}
       </div>
+
+      {/* Scraping Progress Indicator */}
+      {scrapingProgress && (
+        <div className="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg p-4 min-w-[300px]">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="font-medium text-sm">Scraping Analytics...</span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Progress</span>
+              <span>{scrapingProgress.current} / {scrapingProgress.total}</span>
+            </div>
+            <Progress value={(scrapingProgress.current / scrapingProgress.total) * 100} />
+            <p className="text-xs text-muted-foreground">
+              Scraping posts one at a time to avoid rate limiting...
+            </p>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 };
