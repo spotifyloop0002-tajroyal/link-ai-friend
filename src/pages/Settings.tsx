@@ -36,12 +36,17 @@ import {
   Crown,
   Calendar,
   AlertCircle,
+  CheckCircle2,
+  Wifi,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
+
 const SettingsPage = () => {
   usePageTitle("Settings");
   const { profile, isLoading, saveProfile } = useUserProfile();
+  const { isConnected: extensionConnected } = useLinkedBotExtension();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoVerifying, setIsAutoVerifying] = useState(false);
@@ -226,7 +231,34 @@ const SettingsPage = () => {
           </p>
         </motion.div>
 
-        {/* Profile Card */}
+        {/* Extension & Verification Status Banner */}
+        {(extensionConnected || verificationStatus?.status === 'success' || (profile as any)?.linkedin_verified) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="flex flex-col sm:flex-row gap-3"
+          >
+            {extensionConnected && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex-1">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Extension Connected</p>
+                  <p className="text-xs text-muted-foreground">LinkedIn extension is ready</p>
+                </div>
+              </div>
+            )}
+            {((profile as any)?.linkedin_verified || verificationStatus?.status === 'success') && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-primary/30 bg-primary/10 flex-1">
+                <Wifi className="w-5 h-5 text-primary flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">LinkedIn Verified</p>
+                  <p className="text-xs text-muted-foreground">Your account is verified &amp; ready to post</p>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
