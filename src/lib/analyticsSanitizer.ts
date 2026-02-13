@@ -28,13 +28,13 @@ export function sanitizeAnalyticsValue(value: unknown): number {
     if (isNaN(num)) return 0;
   }
 
-  // Detect the x1,000,000 inflation pattern:
-  // LinkedIn posts rarely exceed 10M views organically for normal users.
-  // If value >= 1,000,000 AND is exactly divisible by 1,000,000,
-  // it's almost certainly inflated.
-  if (num >= 1_000_000 && num % 1_000_000 === 0) {
-    console.warn(`⚠️ Analytics value ${num} appears inflated (divisible by 1M), correcting to ${num / 1_000_000}`);
-    return num / 1_000_000;
+  // The extension always inflates values by x1,000,000
+  // e.g., 5 becomes 5000000, 57 becomes 57000000
+  // Always divide by 1,000,000 if value is >= 1,000,000
+  if (num >= 1_000_000) {
+    const corrected = Math.round(num / 1_000_000);
+    console.warn(`⚠️ Analytics value ${num} inflated, correcting to ${corrected}`);
+    return corrected;
   }
 
   return Math.round(num);

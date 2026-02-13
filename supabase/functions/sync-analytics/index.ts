@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     }
 
     // Sanitize values - extension sometimes sends values * 1,000,000
-    const sanitize = (v: number) => (v >= 1_000_000 && v % 1_000_000 === 0) ? v / 1_000_000 : v;
+    const sanitize = (v: number) => v >= 1_000_000 ? Math.round(v / 1_000_000) : v;
     
     const views = sanitize(analytics.views || analytics.reach || 0);
     const likes = sanitize(analytics.likes || 0);

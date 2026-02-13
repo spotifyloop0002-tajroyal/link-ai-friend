@@ -65,7 +65,7 @@ serve(async (req) => {
     // Save post analytics
     if (posts && posts.length > 0) {
       // Sanitize values - extension sometimes sends values * 1,000,000
-      const sanitize = (v: number) => (v >= 1_000_000 && v % 1_000_000 === 0) ? v / 1_000_000 : v;
+      const sanitize = (v: number) => v >= 1_000_000 ? Math.round(v / 1_000_000) : v;
       
       for (const post of posts) {
         const { error: postError } = await supabase
