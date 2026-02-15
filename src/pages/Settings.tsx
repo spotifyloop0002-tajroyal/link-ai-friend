@@ -470,6 +470,25 @@ const SettingsPage = () => {
           </Card>
         </motion.div>
 
+        {/* LinkedIn Verification Card */}
+        {profile?.linkedin_profile_url && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <LinkedInVerification
+              linkedinPublicId={profile.linkedin_public_id}
+              linkedinVerified={profile.linkedin_verified}
+              linkedinProfileUrl={profile.linkedin_profile_url}
+              onVerificationComplete={() => {
+                // Refresh profile to update verification status
+                window.location.reload();
+              }}
+            />
+          </motion.div>
+        )}
+
         {/* Auto-Verification Status */}
         {verificationStatus && (
           <motion.div

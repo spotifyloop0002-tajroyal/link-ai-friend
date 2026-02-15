@@ -267,8 +267,8 @@ const LinkedInConnectionPage = () => {
           </motion.div>
         )}
 
-        {/* LinkedIn Verification */}
-        {isConnected && profile && (
+        {/* LinkedIn Verification - show whenever profile has LinkedIn URL */}
+        {profile?.linkedin_profile_url && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
