@@ -18,7 +18,6 @@ import {
   RefreshCw,
   CheckCircle,
   AlertCircle,
-  BookOpen,
   Loader2,
   ExternalLink,
   Hash,
@@ -307,53 +306,12 @@ const LinkedInConnectionPage = () => {
           </motion.div>
         )}
 
-        {/* Post Scanning Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5" />
-                Post History Scanning
-              </CardTitle>
-              <CardDescription>
-                Scan your LinkedIn posts to help our AI learn your writing style and create posts that match your voice.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {scanComplete && (
-                <Alert className="border-success/50 bg-success/10">
-                  <CheckCircle className="w-4 h-4 text-success" />
-                  <AlertDescription className="text-success">
-                    Post history scanned successfully! AI can now match your writing style.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <Button
-                onClick={() => handleScanPosts()}
-                disabled={!isConnected || scanning || isScanning}
-                className="gap-2"
-              >
-                {scanning || isScanning ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                {scanning || isScanning ? "Scanning Posts..." : scanComplete ? "Re-scan Posts" : "Scan My Posts"}
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Writing Style Analysis */}
         {writingStyle && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.2 }}
           >
             <Card>
               <CardHeader>
@@ -382,20 +340,16 @@ const LinkedInConnectionPage = () => {
                     <p className="text-xl font-bold">{writingStyle.avgHashtagsPerPost}</p>
                   </div>
                 </div>
-
                 {writingStyle.commonHashtags && writingStyle.commonHashtags.length > 0 && (
                   <div>
                     <p className="text-sm font-medium mb-2">Common Hashtags</p>
                     <div className="flex flex-wrap gap-2">
                       {writingStyle.commonHashtags.slice(0, 8).map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          #{tag}
-                        </Badge>
+                        <Badge key={tag} variant="secondary">#{tag}</Badge>
                       ))}
                     </div>
                   </div>
                 )}
-
                 <p className="text-xs text-muted-foreground">
                   Based on analysis of {writingStyle.totalPostsAnalyzed || 0} posts
                 </p>
@@ -403,29 +357,6 @@ const LinkedInConnectionPage = () => {
             </Card>
           </motion.div>
         )}
-
-        {/* Instructions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>How It Works</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ol className="space-y-3 list-decimal list-inside text-sm text-muted-foreground">
-                <li>Install the LinkedBot Chrome extension</li>
-                <li>Click "Connect Extension" to link your account</li>
-                <li>Click "Scan My Posts" to analyze your LinkedIn content</li>
-                <li>AI analyzes your writing style, tone, and preferences</li>
-                <li>Generated posts will match your unique voice</li>
-                <li>Posts are tracked with links and engagement metrics</li>
-              </ol>
-            </CardContent>
-          </Card>
-        </motion.div>
       </div>
 
       {/* LinkedIn Profile URL Modal */}
