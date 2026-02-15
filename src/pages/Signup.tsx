@@ -141,7 +141,7 @@ const Signup = () => {
     
     // Check if extension bridge is available
     const windowWithBridge = window as any;
-    if (typeof windowWithBridge.LinkedBotBridge !== 'undefined') {
+    if (typeof windowWithBridge.LinkedBotBridge !== 'undefined' && typeof windowWithBridge.LinkedBotBridge.setCurrentUser === 'function') {
       windowWithBridge.LinkedBotBridge.setCurrentUser(userId);
     }
     
