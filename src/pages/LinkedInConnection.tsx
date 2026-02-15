@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LinkedInConnectionModal } from "@/components/linkedin/LinkedInConnectionModal";
+import LinkedInVerification from "@/components/linkedin/LinkedInVerification";
 import {
   Wifi,
   WifiOff,
@@ -263,6 +264,22 @@ const LinkedInConnectionPage = () => {
               <AlertCircle className="w-4 h-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          </motion.div>
+        )}
+
+        {/* LinkedIn Verification */}
+        {isConnected && profile && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <LinkedInVerification
+              linkedinPublicId={profile.linkedin_public_id}
+              linkedinVerified={profile.linkedin_verified}
+              linkedinProfileUrl={profile.linkedin_profile_url}
+              onVerificationComplete={() => fetchProfile()}
+            />
           </motion.div>
         )}
 
