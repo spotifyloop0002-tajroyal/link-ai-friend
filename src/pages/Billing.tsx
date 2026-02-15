@@ -410,19 +410,10 @@ const BillingPage = () => {
                         <Button 
                           className="w-full"
                           variant={plan === "pro" ? "gradient" : "secondary"}
-                          onClick={() => handleUpgrade(plan)}
+                          onClick={() => window.open("https://razorpay.me/@aryanbhatnagar", "_blank")}
                           disabled={paymentLoading}
                         >
-                          {isProcessing ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              Processing...
-                            </>
-                          ) : pricing?.final === 0 ? (
-                            "Activate Free"
-                          ) : (
-                            `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`
-                          )}
+                          {`Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`}
                         </Button>
                       ) : null}
                     </motion.div>
