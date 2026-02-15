@@ -1073,6 +1073,41 @@ serve(async (req) => {
     // Fetch user context for personalized AI
     const userContext = await fetchUserContext(authHeader);
 
+    // Load reference materials for this agent
+    let referenceMaterialsText = "";
+    if (authHeader) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // Extract user ID from JWT
+        const token = authHeader.replace("Bearer ", "");
+        const { data: { user } } = await supabase.auth.getUser(token);
+        
+        if (user) {
+          const { data: materials } = await supabase
+            .from("agent_reference_materials")
+            .select("title, content, type")
+            .eq("user_id", user.id)
+            .limit(10);
+          
+          if (materials && materials.length > 0) {
+            referenceMaterialsText = "\n\n═══════════════════════════════════════════\nUSER REFERENCE MATERIALS (Use these to match their style)\n═══════════════════════════════════════════\n" +
+              materials.map((m: any) => `[${m.type.toUpperCase()}] ${m.title}:\n${m.content.substring(0, 500)}`).join("\n\n");
+            console.log("📚 Loaded", materials.length, "reference materials");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load reference materials:", err);
+      }
+    }
+
+    // Inject reference materials into user context
+    if (referenceMaterialsText && userContext) {
+      userContext.aiInstructions = (userContext.aiInstructions || "") + referenceMaterialsText;
+    }
+
     if (!message && uploadedImages.length === 0) {
       return new Response(
         JSON.stringify({

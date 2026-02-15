@@ -170,30 +170,84 @@ export function useAgentChat(
   userContext: UserContext = {},
   agentId?: string | null
 ) {
-  // Initialize with stored data or welcome message
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const stored = loadStoredMessages(agentId);
-    if (stored.length > 0) {
-      console.log("📂 Loaded", stored.length, "messages from storage for agent:", agentId);
-      return stored;
-    }
-    return [getInitialMessage(agentSettings.type)];
-  });
+  // Initialize with welcome message (DB load happens in useEffect)
+  const [messages, setMessages] = useState<ChatMessage[]>([getInitialMessage(agentSettings.type)]);
+  const [dbLoaded, setDbLoaded] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [previewPost, setPreviewPost] = useState<PreviewPost | null>(null);
   
   const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>(() => {
     const stored = loadStoredPosts(agentId);
-    if (stored.length > 0) {
-      console.log("📂 Loaded", stored.length, "posts from storage for agent:", agentId);
-    }
     return stored;
   });
 
-  // Save messages to localStorage when they change
+  // Load chat history from database on mount
   useEffect(() => {
-    if (messages.length > 0) {
+    const loadFromDb = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          // Fall back to localStorage
+          const stored = loadStoredMessages(agentId);
+          if (stored.length > 0) setMessages(stored);
+          setDbLoaded(true);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('agent_id', agentId || '')
+          .order('created_at', { ascending: true })
+          .limit(MAX_STORED_MESSAGES);
+
+        if (error) {
+          console.warn('Failed to load chat from DB, using localStorage:', error);
+          const stored = loadStoredMessages(agentId);
+          if (stored.length > 0) setMessages(stored);
+        } else if (data && data.length > 0) {
+          const dbMessages: ChatMessage[] = data.map((m: any) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            timestamp: new Date(m.created_at),
+            uploadedImages: m.uploaded_images || undefined,
+          }));
+          setMessages(dbMessages);
+        }
+      } catch (err) {
+        console.warn('DB chat load error:', err);
+        const stored = loadStoredMessages(agentId);
+        if (stored.length > 0) setMessages(stored);
+      }
+      setDbLoaded(true);
+    };
+
+    loadFromDb();
+  }, [agentId]);
+
+  // Save new messages to database (debounced via message additions)
+  const saveMessageToDb = useCallback(async (msg: ChatMessage) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !agentId) return;
+
+      await supabase.from('chat_messages').insert({
+        user_id: user.id,
+        agent_id: agentId,
+        role: msg.role,
+        content: msg.content,
+        uploaded_images: msg.uploadedImages || null,
+      });
+    } catch (err) {
+      console.warn('Failed to save message to DB:', err);
+    }
+  }, [agentId]);
+
+  // Also keep localStorage as fallback
+  useEffect(() => {
+    if (messages.length > 0 && dbLoaded) {
       try {
         const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
         localStorage.setItem(getChatStorageKey(agentId), JSON.stringify(messagesToStore));
@@ -201,7 +255,7 @@ export function useAgentChat(
         console.error("Error saving chat history:", error);
       }
     }
-  }, [messages, agentId]);
+  }, [messages, agentId, dbLoaded]);
 
   // Save posts to localStorage when they change
   useEffect(() => {
@@ -233,6 +287,7 @@ export function useAgentChat(
       uploadedImages: displayImages.length > 0 ? displayImages : undefined,
     };
     setMessages(prev => [...prev, userMessage]);
+    saveMessageToDb(userMessage);
     setIsLoading(true);
 
     try {
@@ -269,6 +324,7 @@ export function useAgentChat(
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, assistantMessage]);
+      saveMessageToDb(assistantMessage);
 
       // Handle preview response (for image uploads) - show scheduling dialog
       if (data.type === "post_preview" && data.previewPost) {
@@ -352,11 +408,25 @@ export function useAgentChat(
     }
   }, [messages, agentSettings, userContext, isLoading, generatedPosts]);
 
-  const resetChat = useCallback(() => {
+  const resetChat = useCallback(async () => {
     setMessages([getInitialMessage(agentSettings.type)]);
     setGeneratedPosts([]);
     localStorage.removeItem(getChatStorageKey(agentId));
     localStorage.removeItem(getPostsStorageKey(agentId));
+    
+    // Clear from database too
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && agentId) {
+        await supabase.from('chat_messages')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('agent_id', agentId);
+      }
+    } catch (err) {
+      console.warn('Failed to clear DB chat:', err);
+    }
+    
     toast.success("Chat history cleared");
   }, [agentSettings.type, agentId]);
 

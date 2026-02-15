@@ -25,6 +25,7 @@ import { usePostingLimits } from "@/hooks/usePostingLimits";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
+import { ReferenceMaterials } from "@/components/agents/ReferenceMaterials";
 import { ExtensionStatusIndicator } from "@/components/extension/ExtensionStatusIndicator";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
@@ -592,6 +593,11 @@ const AgentChatPage = () => {
                 {/* Extension Activity Log */}
                 <div className="border-t border-border pt-3 mt-3 h-[140px]">
                   <ExtensionActivityLog entries={activityEntries} onClear={clearActivityLog} />
+                </div>
+
+                {/* Reference Materials */}
+                <div className="border-t border-border pt-3 mt-3">
+                  <ReferenceMaterials agentId={agentId} />
                 </div>
               </>
             )}
