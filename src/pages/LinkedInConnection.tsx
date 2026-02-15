@@ -323,7 +323,7 @@ const LinkedInConnectionPage = () => {
         )}
 
         {/* Missing Profile URL Banner - only show after profile is loaded */}
-        {isConnected && !profileLoading && !hasProfileUrl && (
+        {isConnected && !profileLoading && !hasProfileUrl && !showProfileModal && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
