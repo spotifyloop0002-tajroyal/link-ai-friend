@@ -34,11 +34,21 @@ export function verifyLinkedInAccount(expectedLinkedInId: string): Promise<{
   expectedLinkedInId?: string;
 }> {
   return new Promise((resolve, reject) => {
+    // First check if extension is available
+    const isExtensionInstalled = localStorage.getItem('extension_connected') === 'true' || 
+      !!(window as any).LinkedBotExtension;
+    
+    if (!isExtensionInstalled) {
+      reject(new Error('EXTENSION_NOT_INSTALLED'));
+      return;
+    }
+
     const messageHandler = (event: MessageEvent) => {
       if (event.source !== window) return;
 
       if (event.data.type === 'VERIFY_RESULT') {
         window.removeEventListener('message', messageHandler);
+        clearTimeout(timeoutId);
 
         if (event.data.success) {
           resolve({
@@ -66,11 +76,11 @@ export function verifyLinkedInAccount(expectedLinkedInId: string): Promise<{
       expectedLinkedInId,
     }, '*');
 
-    // Timeout after 30 seconds
-    setTimeout(() => {
+    // Timeout after 15 seconds (reduced from 30)
+    const timeoutId = setTimeout(() => {
       window.removeEventListener('message', messageHandler);
-      reject(new Error('Verification timeout - Extension may not be installed'));
-    }, 30000);
+      reject(new Error('EXTENSION_TIMEOUT'));
+    }, 15000);
   });
 }
 
@@ -82,32 +92,42 @@ export function getVerificationErrorMessage(errorCode: string, details?: {
   currentLinkedInId?: string;
 }) {
   const messages: Record<string, { title: string; message: string; action: string; details?: string }> = {
+    'EXTENSION_NOT_INSTALLED': {
+      title: 'Extension Not Found',
+      message: 'The LinkedBot Chrome extension is not installed or not connected.',
+      action: 'Please install the extension from the Chrome Web Store, then go to LinkedIn Connection page to connect it.',
+    },
+    'EXTENSION_TIMEOUT': {
+      title: 'Extension Not Responding',
+      message: 'The extension did not respond. It may not be active or LinkedIn may not be open.',
+      action: 'Make sure the extension is enabled, open linkedin.com in a tab, then try again.',
+    },
     'LINKEDIN_NOT_OPEN': {
       title: 'LinkedIn Not Open',
       message: 'LinkedIn is not open in this browser.',
-      action: 'Please open linkedin.com in a new tab and try again.',
+      action: 'Please open linkedin.com in a new tab and log in, then try again.',
     },
     'NOT_LOGGED_IN': {
       title: 'Not Logged In',
       message: 'You are not logged into LinkedIn.',
-      action: 'Please log in to LinkedIn and try again.',
+      action: 'Please log in to linkedin.com in this browser and try again.',
     },
     'ACCOUNT_MISMATCH': {
       title: 'Wrong LinkedIn Account',
-      message: "You're logged into the wrong LinkedIn account.",
+      message: "You're logged into a different LinkedIn account than the one registered.",
       details: details ? `Expected: ${details.expectedLinkedInId}\nFound: ${details.currentLinkedInId}` : '',
-      action: 'Please log into the correct LinkedIn account.',
+      action: 'Please log into the correct LinkedIn account and try again.',
     },
     'DETECTION_FAILED': {
       title: 'Detection Failed',
       message: 'Could not detect your LinkedIn account.',
-      action: 'Please refresh and try again.',
+      action: 'Please refresh LinkedIn, make sure you are logged in, and try again.',
     },
   };
 
   return messages[errorCode] || {
     title: 'Verification Error',
-    message: 'An error occurred during verification.',
-    action: 'Please try again.',
+    message: 'An unexpected error occurred during verification.',
+    action: 'Please make sure the extension is installed, LinkedIn is open, and try again.',
   };
 }

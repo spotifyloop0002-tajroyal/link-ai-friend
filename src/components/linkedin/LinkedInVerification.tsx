@@ -67,13 +67,13 @@ export default function LinkedInVerification({
           currentLinkedInId: result.currentLinkedInId,
         });
         setError(errorInfo);
+        toast.error(errorInfo.title, { description: errorInfo.message });
       }
     } catch (err) {
-      setError({
-        title: 'Extension Error',
-        message: 'LinkedBot extension is not responding.',
-        action: 'Make sure the extension is installed and enabled, then try again.',
-      });
+      const errorMsg = err instanceof Error ? err.message : 'UNKNOWN';
+      const errorInfo = getVerificationErrorMessage(errorMsg);
+      setError(errorInfo);
+      toast.error(errorInfo.title, { description: errorInfo.message });
     } finally {
       setLoading(false);
     }
