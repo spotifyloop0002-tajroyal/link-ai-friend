@@ -54,14 +54,17 @@ export const LinkedInConnectionModal: React.FC<LinkedInConnectionModalProps> = (
     setErrorMessage('');
 
     try {
-      // Step 1: Save profile URL to database
-      const saveSuccess = await saveProfile({
-        linkedin_profile_url: profileUrl,
-        linkedin_profile_url_locked: true,
-      });
+      // Step 1: Save profile URL to database (skip if already saved with same URL)
+      const alreadySaved = profile?.linkedin_profile_url === profileUrl;
+      if (!alreadySaved) {
+        const saveSuccess = await saveProfile({
+          linkedin_profile_url: profileUrl,
+          linkedin_profile_url_locked: true,
+        });
 
-      if (!saveSuccess) {
-        throw new Error('Failed to save profile URL to database');
+        if (!saveSuccess) {
+          throw new Error('Failed to save profile URL to database');
+        }
       }
 
       // Step 2: Connect extension
