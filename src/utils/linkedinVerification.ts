@@ -34,15 +34,6 @@ export function verifyLinkedInAccount(expectedLinkedInId: string): Promise<{
   expectedLinkedInId?: string;
 }> {
   return new Promise((resolve, reject) => {
-    // First check if extension is available
-    const isExtensionInstalled = localStorage.getItem('extension_connected') === 'true' || 
-      !!(window as any).LinkedBotExtension;
-    
-    if (!isExtensionInstalled) {
-      reject(new Error('EXTENSION_NOT_INSTALLED'));
-      return;
-    }
-
     const messageHandler = (event: MessageEvent) => {
       if (event.source !== window) return;
 
@@ -70,17 +61,17 @@ export function verifyLinkedInAccount(expectedLinkedInId: string): Promise<{
 
     window.addEventListener('message', messageHandler);
 
-    // Send verification request to extension
+    // Send verification request to extension — extension will open LinkedIn if needed
     window.postMessage({
       type: 'VERIFY_LINKEDIN_ACCOUNT',
       expectedLinkedInId,
     }, '*');
 
-    // Timeout after 15 seconds (reduced from 30)
+    // Timeout after 30 seconds (extension may need to open LinkedIn tab)
     const timeoutId = setTimeout(() => {
       window.removeEventListener('message', messageHandler);
       reject(new Error('EXTENSION_TIMEOUT'));
-    }, 15000);
+    }, 30000);
   });
 }
 

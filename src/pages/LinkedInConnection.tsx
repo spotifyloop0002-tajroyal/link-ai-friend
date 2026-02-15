@@ -78,7 +78,7 @@ const LinkedInConnectionPage = () => {
     }
   }, [profile?.linkedin_profile_url, profile?.linkedin_public_id]);
 
-  // Auto-verify when profile URL exists and extension is connected
+  // Auto-verify when profile URL is saved — extension opens LinkedIn itself
   const autoVerify = useCallback(async (profileUrl: string) => {
     const publicId = extractLinkedInId(profileUrl);
     if (!publicId) return;
@@ -98,14 +98,17 @@ const LinkedInConnectionPage = () => {
           await fetchProfile();
           sonnerToast.success('✅ LinkedIn account verified automatically!');
         }
-      } else if (result.error === 'LINKEDIN_NOT_OPEN' || result.error === 'NOT_LOGGED_IN') {
-        sonnerToast.warning('LinkedIn not detected', {
-          description: 'Please open linkedin.com in this browser and log in. You can verify later from Settings.',
-        });
+      } else {
+        // Extension reported a specific error - show it
+        const errorMsg = result.error === 'ACCOUNT_MISMATCH' 
+          ? 'LinkedIn account mismatch. Please log into the correct account.'
+          : result.error === 'NOT_LOGGED_IN'
+          ? 'Not logged into LinkedIn. Please log in and try verifying from Settings.'
+          : 'Verification failed. You can re-verify from Settings.';
+        sonnerToast.warning('Verification issue', { description: errorMsg });
       }
-      // For other errors (ACCOUNT_MISMATCH etc), show nothing - user can re-verify from Settings
     } catch (err) {
-      // Extension not installed or timeout - silently skip auto-verify
+      // Extension not installed or timeout - silently skip
       console.log('Auto-verify skipped:', err instanceof Error ? err.message : err);
     }
   }, [fetchProfile]);
