@@ -481,6 +481,23 @@ window.addEventListener("message", (event) => {
       }),
     );
   }
+
+  // VERIFY_LINKEDIN_ACCOUNT — forward to extension for LinkedIn account verification
+  if (message.type === "VERIFY_LINKEDIN_ACCOUNT") {
+    console.log("🔗 Bridge v5.0: VERIFY_LINKEDIN_ACCOUNT", message.expectedLinkedInId);
+
+    window.dispatchEvent(
+      new CustomEvent("linkedbot:verify-account", {
+        detail: { expectedLinkedInId: message.expectedLinkedInId },
+      }),
+    );
+  }
+
+  // VERIFY_RESULT — fired by extension after verification check
+  if (message.type === "VERIFY_RESULT") {
+    console.log("🔗 Bridge v5.0: VERIFY_RESULT received", message);
+    // Already handled by window.postMessage — no extra routing needed
+  }
 });
 
-console.log("🔗 LinkedBot Bridge v5.0 loaded (auto analytics scraping)");
+console.log("🔗 LinkedBot Bridge v5.0 loaded (auto analytics scraping + verification)");
