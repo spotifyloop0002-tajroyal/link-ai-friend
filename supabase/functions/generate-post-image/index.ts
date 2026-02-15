@@ -77,9 +77,11 @@ serve(async (req) => {
     const HUGGINGFACE_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
-    // Generate intelligent image prompt from actual post content if not provided
-    const imagePrompt = prompt || generateImagePromptFromPost(postContent);
-    console.log("📝 Using image prompt:", imagePrompt.substring(0, 200));
+    // ALWAYS generate image prompt from actual post content
+    // Only use provided prompt as additional hint, not replacement
+    const contentBasedPrompt = generateImagePromptFromPost(postContent || prompt || '');
+    const imagePrompt = contentBasedPrompt;
+    console.log("📝 Using content-based image prompt:", imagePrompt.substring(0, 200));
 
     let imageBase64: string | null = null;
     let imageUrl: string | null = null;

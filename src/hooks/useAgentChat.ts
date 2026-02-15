@@ -67,10 +67,18 @@ export interface UserContext {
   industry?: string;
 }
 
-// Storage keys for persistence
-const CHAT_STORAGE_KEY = "linkedbot_chat_history";
-const POSTS_STORAGE_KEY = "linkedbot_generated_posts";
+// Storage keys for persistence - now user-specific
+const CHAT_STORAGE_PREFIX = "linkedbot_chat_history_";
+const POSTS_STORAGE_PREFIX = "linkedbot_generated_posts_";
 const MAX_STORED_MESSAGES = 30;
+
+// Get user-specific storage keys
+function getChatStorageKey(agentId?: string | null): string {
+  return `${CHAT_STORAGE_PREFIX}${agentId || 'default'}`;
+}
+function getPostsStorageKey(agentId?: string | null): string {
+  return `${POSTS_STORAGE_PREFIX}${agentId || 'default'}`;
+}
 
 // Agent type specific welcome messages
 const agentWelcomeMessages: Record<string, { intro: string; samples: string[] }> = {
@@ -129,9 +137,9 @@ What should we write about?`,
 }
 
 // Load from localStorage
-function loadStoredMessages(): ChatMessage[] {
+function loadStoredMessages(agentId?: string | null): ChatMessage[] {
   try {
-    const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+    const stored = localStorage.getItem(getChatStorageKey(agentId));
     if (stored) {
       const parsed = JSON.parse(stored);
       return parsed.map((msg: any) => ({
@@ -145,9 +153,9 @@ function loadStoredMessages(): ChatMessage[] {
   return [];
 }
 
-function loadStoredPosts(): GeneratedPost[] {
+function loadStoredPosts(agentId?: string | null): GeneratedPost[] {
   try {
-    const stored = localStorage.getItem(POSTS_STORAGE_KEY);
+    const stored = localStorage.getItem(getPostsStorageKey(agentId));
     if (stored) {
       return JSON.parse(stored);
     }
@@ -164,9 +172,9 @@ export function useAgentChat(
 ) {
   // Initialize with stored data or welcome message
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const stored = loadStoredMessages();
+    const stored = loadStoredMessages(agentId);
     if (stored.length > 0) {
-      console.log("📂 Loaded", stored.length, "messages from storage");
+      console.log("📂 Loaded", stored.length, "messages from storage for agent:", agentId);
       return stored;
     }
     return [getInitialMessage(agentSettings.type)];
@@ -176,9 +184,9 @@ export function useAgentChat(
   const [previewPost, setPreviewPost] = useState<PreviewPost | null>(null);
   
   const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>(() => {
-    const stored = loadStoredPosts();
+    const stored = loadStoredPosts(agentId);
     if (stored.length > 0) {
-      console.log("📂 Loaded", stored.length, "posts from storage");
+      console.log("📂 Loaded", stored.length, "posts from storage for agent:", agentId);
     }
     return stored;
   });
@@ -188,23 +196,21 @@ export function useAgentChat(
     if (messages.length > 0) {
       try {
         const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
-        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messagesToStore));
-        console.log("💾 Saved", messagesToStore.length, "messages");
+        localStorage.setItem(getChatStorageKey(agentId), JSON.stringify(messagesToStore));
       } catch (error) {
         console.error("Error saving chat history:", error);
       }
     }
-  }, [messages]);
+  }, [messages, agentId]);
 
   // Save posts to localStorage when they change
   useEffect(() => {
     try {
-      localStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(generatedPosts));
-      console.log("💾 Saved", generatedPosts.length, "posts");
+      localStorage.setItem(getPostsStorageKey(agentId), JSON.stringify(generatedPosts));
     } catch (error) {
       console.error("Error saving posts:", error);
     }
-  }, [generatedPosts]);
+  }, [generatedPosts, agentId]);
 
   const sendMessage = useCallback(async (message: string, options?: { generateImage?: boolean; uploadedImages?: string[] }): Promise<any> => {
     if (!message.trim() || isLoading) return;
@@ -349,10 +355,10 @@ export function useAgentChat(
   const resetChat = useCallback(() => {
     setMessages([getInitialMessage(agentSettings.type)]);
     setGeneratedPosts([]);
-    localStorage.removeItem(CHAT_STORAGE_KEY);
-    localStorage.removeItem(POSTS_STORAGE_KEY);
+    localStorage.removeItem(getChatStorageKey(agentId));
+    localStorage.removeItem(getPostsStorageKey(agentId));
     toast.success("Chat history cleared");
-  }, [agentSettings.type]);
+  }, [agentSettings.type, agentId]);
 
   const clearHistory = useCallback(() => {
     resetChat();
