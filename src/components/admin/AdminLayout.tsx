@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Tag,
   CreditCard,
+  Key,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -39,6 +40,7 @@ const adminNavItems = [
   { icon: BarChart3, label: "Analytics", path: "/admin/analytics" },
   { icon: Tag, label: "Coupons", path: "/admin/coupons" },
   { icon: CreditCard, label: "Payments", path: "/admin/payments" },
+  { icon: Key, label: "API Keys", path: "/admin/api-keys", superAdminOnly: true },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
   { icon: Shield, label: "Admin Management", path: "/admin/management", superAdminOnly: true },
 ];
