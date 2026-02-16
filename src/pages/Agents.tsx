@@ -144,14 +144,30 @@ const AgentsPage = () => {
               Create and manage your content creation agents
             </p>
           </div>
-          <Button
-            variant="gradient"
-            className="gap-2"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <Plus className="w-4 h-4" />
-            Create New Agent
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                if (agents.length > 0) {
+                  setTrainAgentId(agents[0].id);
+                } else {
+                  toast.error("Create an agent first before training.");
+                }
+              }}
+            >
+              <GraduationCap className="w-4 h-4" />
+              Train Agent
+            </Button>
+            <Button
+              variant="gradient"
+              className="gap-2"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus className="w-4 h-4" />
+              Create New Agent
+            </Button>
+          </div>
         </motion.div>
 
         {/* Stats */}
@@ -234,15 +250,6 @@ const AgentsPage = () => {
                   >
                     <MessageSquare className="w-4 h-4" />
                     Chat
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="text-primary hover:text-primary"
-                    onClick={() => setTrainAgentId(agent.id)}
-                    title="Train Agent"
-                  >
-                    <GraduationCap className="w-4 h-4" />
                   </Button>
                   <Button 
                     variant="ghost" 
@@ -500,7 +507,21 @@ const AgentsPage = () => {
               Upload writing samples, brand guidelines, topic notes, or any reference data. The agent will use this to match your style.
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
+          {agents.length > 1 && (
+            <div className="flex gap-2 flex-wrap mt-2">
+              {agents.map((agent) => (
+                <Button
+                  key={agent.id}
+                  variant={trainAgentId === agent.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrainAgentId(agent.id)}
+                >
+                  {agent.name}
+                </Button>
+              ))}
+            </div>
+          )}
+          <div className="mt-2">
             <ReferenceMaterials agentId={trainAgentId} />
           </div>
         </DialogContent>
