@@ -30,10 +30,12 @@ import {
   Edit,
   Trash2,
   MessageSquare,
+  GraduationCap,
 } from "lucide-react";
 import { useAgents } from "@/hooks/useAgents";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { toast } from "sonner";
+import { ReferenceMaterials } from "@/components/agents/ReferenceMaterials";
 
 const agentTypes = [
   { id: "comedy", icon: Smile, label: "Comedy/Humorous", description: "Funny, light-hearted posts" },
