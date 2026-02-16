@@ -62,12 +62,22 @@ export default function LinkedInVerification({
         toast.success(`✅ LinkedIn account verified successfully!`);
         onVerificationComplete?.();
       } else {
+        // Reset verified status on failure
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from('user_profiles')
+            .update({ linkedin_verified: false, linkedin_verified_at: null })
+            .eq('user_id', user.id);
+        }
+
         const errorInfo = getVerificationErrorMessage(result.error!, {
           expectedLinkedInId: result.expectedLinkedInId,
           currentLinkedInId: result.currentLinkedInId,
         });
         setError(errorInfo);
         toast.error(errorInfo.title, { description: errorInfo.message });
+        onVerificationComplete?.();
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'UNKNOWN';
