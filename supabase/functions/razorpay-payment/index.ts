@@ -13,6 +13,82 @@ const PLAN_PRICES = {
   business: 1999, // ₹1999 = $22
 };
 
+async function sendPaymentEmail(
+  email: string,
+  name: string | null,
+  plan: string,
+  amount: number,
+  discountAmount: number,
+  expiresAt: string
+) {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendApiKey) {
+    console.error("RESEND_API_KEY not configured, skipping payment email");
+    return;
+  }
+
+  const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const expiryDate = new Date(expiresAt).toLocaleDateString("en-IN", {
+    year: "numeric", month: "long", day: "numeric",
+  });
+  const userName = name || "there";
+  const finalAmount = Math.max(0, amount - discountAmount);
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
+      <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">🎉 Payment Successful!</h1>
+        <p style="color: #e0e7ff; margin: 8px 0 0;">Welcome to LinkedBot ${planName}</p>
+      </div>
+      <div style="padding: 32px;">
+        <p style="font-size: 16px; color: #374151;">Hi ${userName},</p>
+        <p style="font-size: 15px; color: #4b5563; line-height: 1.6;">
+          Your payment has been processed successfully. Here are your subscription details:
+        </p>
+        <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 8px 0; color: #6b7280;">Plan</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #111827;">${planName}</td></tr>
+            ${discountAmount > 0 ? `
+            <tr><td style="padding: 8px 0; color: #6b7280;">Original Amount</td><td style="padding: 8px 0; text-align: right; color: #6b7280; text-decoration: line-through;">₹${amount}</td></tr>
+            <tr><td style="padding: 8px 0; color: #059669;">Discount</td><td style="padding: 8px 0; text-align: right; color: #059669;">-₹${discountAmount}</td></tr>
+            ` : ""}
+            <tr><td style="padding: 8px 0; color: #6b7280;">Amount Paid</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #111827;">₹${finalAmount}</td></tr>
+            <tr><td style="padding: 8px 0; color: #6b7280;">Valid Until</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #111827;">${expiryDate}</td></tr>
+          </table>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+          You now have full access to all ${planName} features. Start creating amazing LinkedIn content today!
+        </p>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="https://link-ai-friend.lovable.app/dashboard" style="display: inline-block; background: #6366f1; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Go to Dashboard</a>
+        </div>
+      </div>
+      <div style="background: #f9fafb; padding: 16px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="font-size: 12px; color: #9ca3af; margin: 0;">© ${new Date().getFullYear()} LinkedBot. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({
+        from: "LinkedBot <onboarding@resend.dev>",
+        to: [email],
+        subject: `✅ Payment Confirmed – LinkedBot ${planName} Plan Activated`,
+        html,
+      }),
+    });
+    console.log("Payment confirmation email sent to", email);
+  } catch (err) {
+    console.error("Failed to send payment email:", err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -140,6 +216,16 @@ serve(async (req) => {
               .update({ current_uses: (couponData.current_uses || 0) + 1 })
               .eq("id", couponId);
           }
+        }
+
+        // Send confirmation email
+        const { data: profileData } = await supabase
+          .from("user_profiles")
+          .select("email, name")
+          .eq("user_id", user.id)
+          .single();
+        if (profileData?.email) {
+          await sendPaymentEmail(profileData.email, profileData.name, plan, amount, discountAmount, expiryDate.toISOString());
         }
 
         return new Response(
@@ -313,6 +399,16 @@ serve(async (req) => {
             .update({ current_uses: (couponData.current_uses || 0) + 1 })
             .eq("id", payment.coupon_id);
         }
+      }
+
+      // Send confirmation email
+      const { data: profileData2 } = await supabase
+        .from("user_profiles")
+        .select("email, name")
+        .eq("user_id", user.id)
+        .single();
+      if (profileData2?.email) {
+        await sendPaymentEmail(profileData2.email, profileData2.name, payment.plan, payment.amount, payment.discount_amount || 0, expiryDate.toISOString());
       }
 
       return new Response(
