@@ -488,6 +488,23 @@ const AgentsPage = () => {
           )}
         </DialogContent>
       </Dialog>
+      {/* Train Agent Dialog */}
+      <Dialog open={!!trainAgentId} onOpenChange={(open) => !open && setTrainAgentId(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              Train Agent
+            </DialogTitle>
+            <DialogDescription>
+              Upload writing samples, brand guidelines, topic notes, or any reference data. The agent will use this to match your style.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <ReferenceMaterials agentId={trainAgentId} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
