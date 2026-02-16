@@ -25,7 +25,7 @@ import { usePostingLimits } from "@/hooks/usePostingLimits";
 import { PostPreviewCard } from "@/components/agents/PostPreviewCard";
 import { ExtensionActivityLog, useExtensionActivityLog } from "@/components/agents/ExtensionActivityLog";
 import { ImageUploadPanel } from "@/components/agents/ImageUploadPanel";
-import { ReferenceMaterials } from "@/components/agents/ReferenceMaterials";
+
 import { ExtensionStatusIndicator } from "@/components/extension/ExtensionStatusIndicator";
 import { toast } from "sonner";
 import { useLinkedBotExtension } from "@/hooks/useLinkedBotExtension";
@@ -542,7 +542,7 @@ const AgentChatPage = () => {
           </div>
 
           {/* Generated Posts Section - always visible */}
-          <div className="w-[400px] flex-shrink-0 border-l border-border pl-6 flex flex-col">
+          <div className="w-[340px] flex-shrink-0 border-l border-border pl-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-lg">Generated Posts</h3>
               <span className="text-sm text-muted-foreground">
@@ -595,10 +595,6 @@ const AgentChatPage = () => {
                   <ExtensionActivityLog entries={activityEntries} onClear={clearActivityLog} />
                 </div>
 
-                {/* Reference Materials */}
-                <div className="border-t border-border pt-3 mt-3">
-                  <ReferenceMaterials agentId={agentId} />
-                </div>
               </>
             )}
           </div>
